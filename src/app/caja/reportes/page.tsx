@@ -13,10 +13,11 @@ export default async function Reportes({ searchParams }: PageProps<"/caja/report
   const { dias: param } = await searchParams;
   const dias = PERIODOS.includes(Number(param)) ? Number(param) : 7;
 
-  // Desde el inicio del día (hora de Bogotá) de hace `dias - 1` días hasta ahora.
-  const hoy = new Date(`${diaBogota(new Date())}T00:00:00${OFFSET_BOGOTA}`);
-  const desde = new Date(hoy.getTime() - (dias - 1) * 86_400_000);
-  const reporte = await reporteVentas(db, desde, new Date());
+  // Jornadas (días calendario en hora de Bogotá) desde hace `dias - 1` días hasta hoy.
+  const hoy = diaBogota(new Date());
+  const inicioHoy = new Date(`${hoy}T12:00:00${OFFSET_BOGOTA}`);
+  const desde = diaBogota(new Date(inicioHoy.getTime() - (dias - 1) * 86_400_000));
+  const reporte = await reporteVentas(db, desde, hoy);
 
   return (
     <div className="flex flex-col gap-6">
@@ -30,33 +31,43 @@ export default async function Reportes({ searchParams }: PageProps<"/caja/report
       </div>
 
       <section className="card">
-        <h2 className="mb-2 font-semibold">Ventas diarias</h2>
-        <table className="tabla">
+        <h2 className="mb-2 font-semibold">Ventas por jornada</h2>
+        <p className="mb-2 text-xs text-stone-500">
+          Jornada = día calendario en hora de Bogotá. «Pendiente» son ventas aún no incluidas en un cierre de caja.
+        </p>
+        <table className="tabla" data-testid="ventas-por-jornada">
           <thead>
             <tr>
-              <th>Día</th>
+              <th>Jornada</th>
               <th>Facturas</th>
+              <th>Turnos cerrados</th>
+              <th>Cerrado</th>
+              <th>Pendiente</th>
               <th>Total</th>
             </tr>
           </thead>
           <tbody>
-            {reporte.ventasPorDia.length === 0 && (
+            {reporte.ventasPorJornada.length === 0 && (
               <tr>
-                <td colSpan={3}>Sin ventas en el periodo.</td>
+                <td colSpan={6}>Sin ventas en el periodo.</td>
               </tr>
             )}
-            {reporte.ventasPorDia.map((v) => (
-              <tr key={v.dia}>
-                <td>{v.dia}</td>
+            {reporte.ventasPorJornada.map((v) => (
+              <tr key={v.jornada}>
+                <td>{v.jornada}</td>
                 <td>{v.facturas}</td>
+                <td>{v.turnos}</td>
+                <td>{formatoCOP(v.cerrado)}</td>
+                <td>{formatoCOP(v.pendiente)}</td>
                 <td>{formatoCOP(v.total)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td className="font-semibold">Total periodo</td>
-              <td></td>
+              <td className="font-semibold" colSpan={5}>
+                Total periodo ({desde} a {hoy})
+              </td>
               <td className="font-semibold">{formatoCOP(reporte.totalPeriodo)}</td>
             </tr>
           </tfoot>

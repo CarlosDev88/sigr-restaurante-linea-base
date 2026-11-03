@@ -4,7 +4,7 @@ import type { BD } from "../db/cliente";
 import { facturaItems, facturas, pedidos } from "../db/schema";
 import { MEDIOS_PAGO_SELECCIONABLES, PREFIJO_FACTURA, TASA_IMPUESTO_CONSUMO, TIPOS_DOCUMENTO } from "../domain/constantes";
 import { datosEmisor } from "../domain/restaurante";
-import { calcularFactura, ErrorNegocio, numeroFactura } from "../domain/reglas";
+import { calcularFactura, diaBogota, ErrorNegocio, numeroFactura } from "../domain/reglas";
 
 const textoOpcional = z
   .string()
@@ -42,8 +42,15 @@ function esErrorUnico(e: unknown): boolean {
  * - El número es el consecutivo siguiente; la BD garantiza unicidad de número y de pedido.
  * - Los valores se calculan en el servidor a partir del detalle guardado del pedido.
  * - Se copian los datos del emisor, del cliente y del detalle (datos históricos).
+ * - La jornada de caja es el día calendario de la emisión en hora de Bogotá.
  */
-export async function facturarPedido(bd: BD, pedidoId: number, emitidaPorId: number, datos: DatosFacturar) {
+export async function facturarPedido(
+  bd: BD,
+  pedidoId: number,
+  emitidaPorId: number,
+  datos: DatosFacturar,
+  ahora: Date = new Date(),
+) {
   const entrada = esquemaFacturar.parse(datos);
   const emisor = datosEmisor();
   try {
@@ -82,6 +89,8 @@ export async function facturarPedido(bd: BD, pedidoId: number, emitidaPorId: num
             prefijo: PREFIJO_FACTURA,
             numero: ultimo + 1,
             pedidoId,
+            emitidaEn: ahora,
+            jornada: diaBogota(ahora),
             emitidaPorId,
             emisorRazonSocial: emisor.razonSocial,
             emisorNit: emisor.nit,
