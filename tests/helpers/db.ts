@@ -8,7 +8,8 @@ export const db = crearBD("file:./data/test.db");
 /** Borra todos los datos respetando las llaves foráneas. */
 export async function limpiarBD() {
   for (const tabla of [
-    t.comprobantes,
+    t.facturaItems,
+    t.facturas,
     t.cierresCaja,
     t.pedidoItems,
     t.pedidos,

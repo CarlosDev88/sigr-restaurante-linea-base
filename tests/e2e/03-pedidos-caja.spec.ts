@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { iniciarSesion } from "./utilidades";
 
-test("pedido completo: registro, actualización en tiempo real, cobro con comprobante y cierre de caja", async ({ browser }) => {
+test("pedido completo: registro, actualización en tiempo real, cobro con factura y cierre de caja", async ({ browser }) => {
   // Dos pantallas independientes: el administrador observa el tablero y el mesero registra.
   const admin = await (await browser.newContext()).newPage();
   const mesero = await (await browser.newContext()).newPage();
@@ -33,16 +33,24 @@ test("pedido completo: registro, actualización en tiempo real, cobro con compro
   await expect(admin.locator("article", { hasText: "Mesa 3" }).locator("[data-estado]")).toHaveText("Entregado", {
     timeout: 3000,
   });
-  await tarjetaMesero.getByRole("button", { name: "Cobrar y emitir comprobante" }).click();
-  await expect(mesero).toHaveURL(/\/comprobantes\/1$/);
-  await expect(mesero.getByTestId("comprobante")).toContainText("N° 000001");
-  await expect(mesero.getByTestId("total-comprobante")).toHaveText(/\$\s?50\.000/);
+  await tarjetaMesero.getByRole("link", { name: "Cobrar y facturar" }).click();
+  await expect(mesero).toHaveURL(/\/pedidos\/\d+\/facturar$/);
+  await expect(mesero.getByTestId("total-a-facturar")).toHaveText(/\$\s?50\.000/);
+  await mesero.getByLabel("Medio de pago").selectOption("EFECTIVO");
+  await mesero.getByRole("button", { name: "Emitir factura" }).click();
+  await expect(mesero).toHaveURL(/\/facturas\/1$/);
+  await expect(mesero.getByTestId("numero-factura")).toHaveText("FA-000001");
+  await expect(mesero.getByTestId("subtotal-factura")).toHaveText(/\$\s?46\.296/);
+  await expect(mesero.getByTestId("impuesto-factura")).toHaveText(/\$\s?3\.704/);
+  await expect(mesero.getByTestId("total-factura")).toHaveText(/\$\s?50\.000/);
+  // El pedido facturado sale del tablero del administrador en tiempo real.
+  await expect(admin.locator("article", { hasText: "Mesa 3" })).toHaveCount(0, { timeout: 3000 });
 
   // 4. Cierre de caja por el administrador.
   await admin.goto("/caja");
   await expect(admin.getByTestId("total-caja-abierta")).toHaveText(/\$\s?50\.000/);
   await admin.getByRole("button", { name: "Cerrar caja" }).click();
-  await expect(admin.getByRole("status")).toContainText("1 comprobantes");
+  await expect(admin.getByRole("status")).toContainText("1 facturas");
   await expect(admin.getByTestId("historial-cierres")).toContainText("Administrador");
   await expect(admin.getByTestId("total-caja-abierta")).toHaveText(/\$\s?0/);
 

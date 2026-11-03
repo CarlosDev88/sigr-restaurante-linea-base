@@ -3,7 +3,7 @@ import { FormularioAccion } from "@/components/formulario-accion";
 import { PERMISOS } from "@/lib/auth/permisos";
 import { exigirRol } from "@/lib/auth/sesion";
 import { db } from "@/lib/db";
-import { formatoCOP, formatoFechaHora } from "@/lib/domain/reglas";
+import { formatoCOP, formatoFechaHora, numeroFactura } from "@/lib/domain/reglas";
 import { cajaAbierta, listarCierres } from "@/lib/services/caja";
 import { accionCerrarCaja } from "./actions";
 
@@ -21,7 +21,7 @@ export default async function Caja() {
       </div>
 
       <section className="card">
-        <h2 className="mb-2 font-semibold">Caja abierta (comprobantes sin cierre)</h2>
+        <h2 className="mb-2 font-semibold">Caja abierta (facturas sin cierre)</h2>
         <table className="tabla mb-3">
           <thead>
             <tr>
@@ -32,20 +32,20 @@ export default async function Caja() {
             </tr>
           </thead>
           <tbody>
-            {abierta.comprobantes.length === 0 && (
+            {abierta.facturas.length === 0 && (
               <tr>
-                <td colSpan={4}>No hay comprobantes pendientes.</td>
+                <td colSpan={4}>No hay facturas pendientes.</td>
               </tr>
             )}
-            {abierta.comprobantes.map((c) => (
+            {abierta.facturas.map((c) => (
               <tr key={c.id}>
                 <td>
-                  <Link href={`/comprobantes/${c.numero}`} className="underline">
-                    {c.numero}
+                  <Link href={`/facturas/${c.numero}`} className="underline">
+                    {numeroFactura(c.prefijo, c.numero)}
                   </Link>
                 </td>
-                <td>{formatoFechaHora(c.emitidoEn)}</td>
-                <td>{c.pedido.mesa.numero}</td>
+                <td>{formatoFechaHora(c.emitidaEn)}</td>
+                <td>{c.mesaNumero}</td>
                 <td>{formatoCOP(c.total)}</td>
               </tr>
             ))}
@@ -65,7 +65,7 @@ export default async function Caja() {
               <th>Cierre</th>
               <th>Fecha y hora</th>
               <th>Responsable</th>
-              <th>Comprobantes</th>
+              <th>Facturas</th>
               <th>Total</th>
             </tr>
           </thead>
@@ -80,7 +80,7 @@ export default async function Caja() {
                 <td>{c.id}</td>
                 <td>{formatoFechaHora(c.fechaHora)}</td>
                 <td>{c.responsable.nombre}</td>
-                <td>{c.cantidadComprobantes}</td>
+                <td>{c.cantidadFacturas}</td>
                 <td>{formatoCOP(c.total)}</td>
               </tr>
             ))}

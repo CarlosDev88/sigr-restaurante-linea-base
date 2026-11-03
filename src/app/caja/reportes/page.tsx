@@ -35,7 +35,7 @@ export default async function Reportes({ searchParams }: PageProps<"/caja/report
           <thead>
             <tr>
               <th>Día</th>
-              <th>Comprobantes</th>
+              <th>Facturas</th>
               <th>Total</th>
             </tr>
           </thead>
@@ -48,7 +48,7 @@ export default async function Reportes({ searchParams }: PageProps<"/caja/report
             {reporte.ventasPorDia.map((v) => (
               <tr key={v.dia}>
                 <td>{v.dia}</td>
-                <td>{v.comprobantes}</td>
+                <td>{v.facturas}</td>
                 <td>{formatoCOP(v.total)}</td>
               </tr>
             ))}

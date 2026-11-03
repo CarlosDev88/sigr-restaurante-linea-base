@@ -13,6 +13,36 @@ export type EstadoPedido = (typeof ESTADOS_PEDIDO)[number];
 export const ESTADOS_RESERVA = ["PENDIENTE", "CONFIRMADA", "CANCELADA"] as const;
 export type EstadoReserva = (typeof ESTADOS_RESERVA)[number];
 
+export const MEDIOS_PAGO = ["EFECTIVO", "TARJETA", "TRANSFERENCIA", "NO_REGISTRADO"] as const;
+export type MedioPago = (typeof MEDIOS_PAGO)[number];
+/** Medios que se pueden elegir al facturar (NO_REGISTRADO solo existe en facturas migradas de la v1.0.0). */
+export const MEDIOS_PAGO_SELECCIONABLES = ["EFECTIVO", "TARJETA", "TRANSFERENCIA"] as const;
+
+export const TIPOS_DOCUMENTO = ["CC", "CE", "NIT", "PAS"] as const;
+export type TipoDocumento = (typeof TIPOS_DOCUMENTO)[number];
+
+export const ETIQUETA_TIPO_DOCUMENTO: Record<TipoDocumento, string> = {
+  CC: "Cédula de ciudadanía",
+  CE: "Cédula de extranjería",
+  NIT: "NIT",
+  PAS: "Pasaporte",
+};
+
+export const ETIQUETA_MEDIO_PAGO: Record<MedioPago, string> = {
+  EFECTIVO: "Efectivo",
+  TARJETA: "Tarjeta",
+  TRANSFERENCIA: "Transferencia",
+  NO_REGISTRADO: "No registrado",
+};
+
+/**
+ * Impuesto nacional al consumo para servicio de restaurante (porcentaje). Los precios del menú
+ * lo incluyen; la factura lo discrimina. Valor de referencia académica, configurable aquí.
+ */
+export const TASA_IMPUESTO_CONSUMO = 8;
+
+export const PREFIJO_FACTURA = "FA";
+
 /** Duración fija de una reserva, en minutos. */
 export const DURACION_RESERVA_MIN = 120;
 
