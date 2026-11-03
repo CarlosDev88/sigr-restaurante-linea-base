@@ -1,6 +1,6 @@
 # Revisión de seguridad de dependencias
 
-Revisión hecha con `npm audit` (registro público de npm) sobre `package-lock.json` de la versión **v1.1.0**, en un clon limpio. Los registros completos están en la carpeta de evidencias (`11-npm-audit*.txt`/`.json`). Comando reproducible: `npm run auditoria`.
+Revisión hecha con `npm audit` (registro público de npm) sobre `package-lock.json` de la versión **v1.1.0**, en un clon limpio. Los registros completos están en la carpeta de evidencias de la versión (`07-npm-audit-produccion.txt`, `07-npm-audit-completo.txt` y `.json`, `07-npm-ls-esbuild.txt`). Comando reproducible: `npm run auditoria`.
 
 ## Resumen
 
