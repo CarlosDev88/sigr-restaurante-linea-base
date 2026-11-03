@@ -51,7 +51,7 @@ describe("pedidos", () => {
     await expect(cambiarEstadoPedido(db, id, "ENTREGADO")).rejects.toBeInstanceOf(ErrorNegocio);
     await cambiarEstadoPedido(db, id, "EN_PREPARACION");
     await cambiarEstadoPedido(db, id, "ENTREGADO");
-    await expect(cambiarEstadoPedido(db, id, "PAGADO")).rejects.toThrow(/comprobante/);
+    await expect(cambiarEstadoPedido(db, id, "PAGADO")).rejects.toThrow(/factura/);
     expect((await listarPedidosActivos(db))[0].siguientes).toEqual(["PAGADO"]);
 
     const otro = await crearPedido(db, meseroId, { mesaId, items: [{ platoId: platoB, cantidad: 1 }] });

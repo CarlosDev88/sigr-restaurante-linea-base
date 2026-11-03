@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { BD } from "../db/cliente";
 import { mesas, pedidoItems, pedidos, platos } from "../db/schema";
 import type { EstadoPedido } from "../domain/constantes";
-import { calcularTotal, ErrorNegocio, puedeTransicionar, siguientesEstados } from "../domain/reglas";
+import { calcularTotal, ErrorNegocio, numeroFactura, puedeTransicionar, siguientesEstados } from "../domain/reglas";
 
 export const esquemaPedido = z.object({
   mesaId: z.coerce.number().int().positive({ error: "Seleccione una mesa." }),
@@ -69,7 +69,7 @@ export interface PedidoResumen {
   items: { nombre: string; cantidad: number; precioUnitario: number }[];
   total: number;
   siguientes: EstadoPedido[];
-  comprobanteNumero: number | null;
+  facturaNumero: string | null;
 }
 
 /** Pedidos en curso (no pagados ni cancelados), del más antiguo al más reciente. */
@@ -77,7 +77,7 @@ export async function listarPedidosActivos(bd: BD): Promise<PedidoResumen[]> {
   const filas = await bd.query.pedidos.findMany({
     where: notInArray(pedidos.estado, ["PAGADO", "CANCELADO"]),
     orderBy: asc(pedidos.creadoEn),
-    with: { mesa: true, mesero: { columns: { nombre: true } }, items: true, comprobante: true },
+    with: { mesa: true, mesero: { columns: { nombre: true } }, items: true, factura: { columns: { prefijo: true, numero: true } } },
   });
   return filas.map((p) => ({
     id: p.id,
@@ -89,17 +89,17 @@ export async function listarPedidosActivos(bd: BD): Promise<PedidoResumen[]> {
     items: p.items.map((i) => ({ nombre: i.nombrePlato, cantidad: i.cantidad, precioUnitario: i.precioUnitario })),
     total: calcularTotal(p.items),
     siguientes: siguientesEstados(p.estado),
-    comprobanteNumero: p.comprobante?.numero ?? null,
+    facturaNumero: p.factura ? numeroFactura(p.factura.prefijo, p.factura.numero) : null,
   }));
 }
 
 /**
  * Cambia el estado operativo de un pedido. El paso a PAGADO no se hace aquí:
- * requiere emitir comprobante (módulo de caja).
+ * requiere emitir la factura (módulo de facturación).
  */
 export async function cambiarEstadoPedido(bd: BD, pedidoId: number, nuevo: EstadoPedido) {
   if (nuevo === "PAGADO") {
-    throw new ErrorNegocio("El pago se registra emitiendo el comprobante.");
+    throw new ErrorNegocio("El pago se registra al emitir la factura.");
   }
   const [p] = await bd.select().from(pedidos).where(eq(pedidos.id, pedidoId));
   if (!p) throw new ErrorNegocio("El pedido no existe.");

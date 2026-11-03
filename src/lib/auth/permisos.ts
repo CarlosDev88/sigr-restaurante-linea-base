@@ -25,5 +25,6 @@ export const PERMISOS = {
   crearReserva: ["CLIENTE"],
   administrarReservas: ["ADMIN"],
   caja: ["ADMIN"],
-  verComprobantes: ["MESERO", "ADMIN"],
+  facturar: ["MESERO", "ADMIN"],
+  verFacturas: ["MESERO", "ADMIN"],
 } as const satisfies Record<string, readonly Rol[]>;

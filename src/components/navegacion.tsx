@@ -8,6 +8,7 @@ const ENLACES: { href: string; texto: string; roles?: readonly Rol[] }[] = [
   { href: "/menu", texto: "Menú" },
   { href: "/reservas", texto: "Mis reservas", roles: PERMISOS.crearReserva },
   { href: "/pedidos", texto: "Pedidos", roles: PERMISOS.gestionarPedidos },
+  { href: "/facturas", texto: "Facturas", roles: PERMISOS.verFacturas },
   { href: "/admin/reservas", texto: "Reservas", roles: PERMISOS.administrarReservas },
   { href: "/admin/menu", texto: "Administrar menú", roles: PERMISOS.administrarMenu },
   { href: "/caja", texto: "Caja", roles: PERMISOS.caja },

@@ -37,6 +37,40 @@ export function calcularTotal(items: { precioUnitario: number; cantidad: number 
   return items.reduce((suma, i) => suma + i.precioUnitario * i.cantidad, 0);
 }
 
+// ---------- Facturación ----------
+
+export interface ValoresFactura {
+  items: { descripcion: string; platoId: number; cantidad: number; valorUnitario: number; valorTotal: number }[];
+  subtotal: number;
+  impuestoConsumo: number;
+  total: number;
+}
+
+/**
+ * Calcula los valores de la factura a partir del detalle del pedido (precios con impuesto incluido).
+ * total = Σ cantidad × valor unitario; subtotal = round(total / (1 + tasa)); impuesto = total − subtotal.
+ */
+export function calcularFactura(
+  items: { platoId: number; nombrePlato: string; precioUnitario: number; cantidad: number }[],
+  tasaPorcentaje: number,
+): ValoresFactura {
+  if (items.length === 0) throw new ErrorNegocio("El pedido no tiene productos.");
+  const detalle = items.map((i) => ({
+    descripcion: i.nombrePlato,
+    platoId: i.platoId,
+    cantidad: i.cantidad,
+    valorUnitario: i.precioUnitario,
+    valorTotal: i.precioUnitario * i.cantidad,
+  }));
+  const total = detalle.reduce((s, i) => s + i.valorTotal, 0);
+  const subtotal = Math.round(total / (1 + tasaPorcentaje / 100));
+  return { items: detalle, subtotal, impuestoConsumo: total - subtotal, total };
+}
+
+export function numeroFactura(prefijo: string, numero: number): string {
+  return `${prefijo}-${String(numero).padStart(6, "0")}`;
+}
+
 // ---------- Reservas ----------
 
 export interface Intervalo {

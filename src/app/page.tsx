@@ -4,7 +4,8 @@ const modulos = [
   { href: "/menu", nombre: "Menú digital", detalle: "Consulta de platos disponibles por categoría." },
   { href: "/reservas", nombre: "Reservas", detalle: "Reserva por fecha, hora y número de personas." },
   { href: "/pedidos", nombre: "Pedidos", detalle: "Registro y seguimiento de pedidos por mesa." },
-  { href: "/caja", nombre: "Caja", detalle: "Comprobantes, cierres de caja y reportes de ventas." },
+  { href: "/facturas", nombre: "Facturación", detalle: "Facturas de venta emitidas al cobrar los pedidos." },
+  { href: "/caja", nombre: "Caja", detalle: "Cierres de caja y reportes de ventas." },
   { href: "/admin/menu", nombre: "Administrar menú", detalle: "CRUD de categorías y platos." },
 ];
 

@@ -1,78 +1,36 @@
 import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import type { BD } from "../db/cliente";
-import { cierresCaja, comprobantes, pedidoItems, pedidos } from "../db/schema";
-import { calcularTotal, diaBogota, ErrorNegocio } from "../domain/reglas";
+import { cierresCaja, facturaItems, facturas } from "../db/schema";
+import { diaBogota, ErrorNegocio } from "../domain/reglas";
 
-/**
- * Cobra un pedido entregado: emite un comprobante interno con número consecutivo y
- * marca el pedido como PAGADO, todo en una sola transacción.
- * El comprobante NO es una factura electrónica (ver docs/alcance.md).
- */
-export async function pagarPedido(bd: BD, pedidoId: number, emitidoPorId: number) {
-  return bd.transaction(
-    async (tx) => {
-      const pedido = await tx.query.pedidos.findFirst({ where: eq(pedidos.id, pedidoId), with: { items: true } });
-      if (!pedido) throw new ErrorNegocio("El pedido no existe.");
-      if (pedido.estado === "PAGADO") throw new ErrorNegocio("El pedido ya fue pagado.");
-      if (pedido.estado !== "ENTREGADO") throw new ErrorNegocio("Solo se cobran pedidos entregados.");
-
-      const [{ ultimo }] = await tx
-        .select({ ultimo: sql<number>`coalesce(max(${comprobantes.numero}), 0)` })
-        .from(comprobantes);
-      const [comprobante] = await tx
-        .insert(comprobantes)
-        .values({ numero: ultimo + 1, pedidoId, total: calcularTotal(pedido.items), emitidoPorId })
-        .returning();
-      await tx.update(pedidos).set({ estado: "PAGADO", actualizadoEn: new Date() }).where(eq(pedidos.id, pedidoId));
-      return comprobante;
-    },
-    { behavior: "immediate" },
-  );
-}
-
-export async function obtenerComprobante(bd: BD, numero: number) {
-  return bd.query.comprobantes.findFirst({
-    where: eq(comprobantes.numero, numero),
-    with: {
-      pedido: { with: { items: true, mesa: true, mesero: { columns: { nombre: true } } } },
-      emitidoPor: { columns: { nombre: true } },
-      cierre: true,
-    },
-  });
-}
-
-/** Comprobantes emitidos que todavía no pertenecen a ningún cierre. */
+/** Facturas emitidas que todavía no pertenecen a ningún cierre. */
 export async function cajaAbierta(bd: BD) {
-  const lista = await bd.query.comprobantes.findMany({
-    where: isNull(comprobantes.cierreId),
-    orderBy: asc(comprobantes.numero),
-    with: { pedido: { with: { mesa: true } } },
-  });
-  return { comprobantes: lista, total: lista.reduce((s, c) => s + c.total, 0) };
+  const lista = await bd.select().from(facturas).where(isNull(facturas.cierreId)).orderBy(asc(facturas.numero));
+  return { facturas: lista, total: lista.reduce((s, f) => s + f.total, 0) };
 }
 
 /**
- * Registra un cierre de caja con fecha, responsable, total y cantidad de comprobantes.
- * Los comprobantes quedan asociados al cierre, así que el total guardado no cambia
- * aunque después se emitan nuevos comprobantes.
+ * Registra un cierre de caja con fecha, responsable, total y cantidad de facturas.
+ * Las facturas quedan asociadas al cierre, así que el total guardado no cambia
+ * aunque después se emitan nuevas facturas.
  */
 export async function cerrarCaja(bd: BD, responsableId: number) {
   return bd.transaction(
     async (tx) => {
-      const pendientes = await tx.select().from(comprobantes).where(isNull(comprobantes.cierreId));
-      if (pendientes.length === 0) throw new ErrorNegocio("No hay comprobantes pendientes de cierre.");
+      const pendientes = await tx.select().from(facturas).where(isNull(facturas.cierreId));
+      if (pendientes.length === 0) throw new ErrorNegocio("No hay facturas pendientes de cierre.");
       const [cierre] = await tx
         .insert(cierresCaja)
         .values({
           responsableId,
-          total: pendientes.reduce((s, c) => s + c.total, 0),
-          cantidadComprobantes: pendientes.length,
+          total: pendientes.reduce((s, f) => s + f.total, 0),
+          cantidadFacturas: pendientes.length,
         })
         .returning();
       await tx
-        .update(comprobantes)
+        .update(facturas)
         .set({ cierreId: cierre.id })
-        .where(inArray(comprobantes.id, pendientes.map((c) => c.id)));
+        .where(inArray(facturas.id, pendientes.map((f) => f.id)));
       return cierre;
     },
     { behavior: "immediate" },
@@ -87,37 +45,29 @@ export async function listarCierres(bd: BD, limite = 30) {
   });
 }
 
-/** Ventas por día (zona horaria de Bogotá) y platos más vendidos en [desde, hasta). */
+/** Ventas por día (zona horaria de Bogotá) y productos más vendidos en [desde, hasta), según facturas. */
 export async function reporteVentas(bd: BD, desde: Date, hasta: Date) {
-  const enRango = and(gte(comprobantes.emitidoEn, desde), lt(comprobantes.emitidoEn, hasta));
+  const enRango = and(gte(facturas.emitidaEn, desde), lt(facturas.emitidaEn, hasta));
 
-  const lista = await bd.select().from(comprobantes).where(enRango).orderBy(asc(comprobantes.emitidoEn));
-  const porDia = new Map<string, { dia: string; comprobantes: number; total: number }>();
-  for (const c of lista) {
-    const dia = diaBogota(c.emitidoEn);
-    const fila = porDia.get(dia) ?? { dia, comprobantes: 0, total: 0 };
-    fila.comprobantes += 1;
-    fila.total += c.total;
+  const lista = await bd.select().from(facturas).where(enRango).orderBy(asc(facturas.emitidaEn));
+  const porDia = new Map<string, { dia: string; facturas: number; total: number }>();
+  for (const f of lista) {
+    const dia = diaBogota(f.emitidaEn);
+    const fila = porDia.get(dia) ?? { dia, facturas: 0, total: 0 };
+    fila.facturas += 1;
+    fila.total += f.total;
     porDia.set(dia, fila);
   }
 
-  const cantidad = sql<number>`sum(${pedidoItems.cantidad})`;
+  const cantidad = sql<number>`sum(${facturaItems.cantidad})`;
   const platosMasVendidos = await bd
-    .select({
-      plato: pedidoItems.nombrePlato,
-      cantidad,
-      total: sql<number>`sum(${pedidoItems.cantidad} * ${pedidoItems.precioUnitario})`,
-    })
-    .from(pedidoItems)
-    .innerJoin(comprobantes, eq(comprobantes.pedidoId, pedidoItems.pedidoId))
+    .select({ plato: facturaItems.descripcion, cantidad, total: sql<number>`sum(${facturaItems.valorTotal})` })
+    .from(facturaItems)
+    .innerJoin(facturas, eq(facturas.id, facturaItems.facturaId))
     .where(enRango)
-    .groupBy(pedidoItems.nombrePlato)
-    .orderBy(desc(cantidad), asc(pedidoItems.nombrePlato))
+    .groupBy(facturaItems.descripcion)
+    .orderBy(desc(cantidad), asc(facturaItems.descripcion))
     .limit(10);
 
-  return {
-    ventasPorDia: [...porDia.values()],
-    totalPeriodo: lista.reduce((s, c) => s + c.total, 0),
-    platosMasVendidos,
-  };
+  return { ventasPorDia: [...porDia.values()], totalPeriodo: lista.reduce((s, f) => s + f.total, 0), platosMasVendidos };
 }
