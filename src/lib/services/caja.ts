@@ -1,63 +1,131 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { BD } from "../db/cliente";
 import { cierresCaja, facturaItems, facturas } from "../db/schema";
 import { diaBogota, ErrorNegocio } from "../domain/reglas";
 
-/** Facturas emitidas que todavía no pertenecen a ningún cierre. */
-export async function cajaAbierta(bd: BD) {
-  const lista = await bd.select().from(facturas).where(isNull(facturas.cierreId)).orderBy(asc(facturas.numero));
-  return { facturas: lista, total: lista.reduce((s, f) => s + f.total, 0) };
+/**
+ * Cierre de caja diario por jornada y turno.
+ *
+ * - Jornada: día calendario en hora de Bogotá (00:00–23:59, UTC-5). Cada factura pertenece a la
+ *   jornada en que se emitió y nunca cambia de jornada.
+ * - Turno: cada cierre de una jornada recibe el siguiente número de turno (1, 2, …). Un cierre
+ *   agrupa solo las facturas PENDIENTES DE ESA jornada; jamás mezcla jornadas distintas.
+ * - Las ventas posteriores a un cierre quedan pendientes para el siguiente turno; los cierres
+ *   ya registrados no se modifican.
+ */
+
+const FORMATO_JORNADA = /^\d{4}-\d{2}-\d{2}$/;
+
+export interface JornadaPendiente {
+  jornada: string;
+  facturas: (typeof facturas.$inferSelect)[];
+  total: number;
+  siguienteTurno: number;
 }
 
-/**
- * Registra un cierre de caja con fecha, responsable, total y cantidad de facturas.
- * Las facturas quedan asociadas al cierre, así que el total guardado no cambia
- * aunque después se emitan nuevas facturas.
- */
-export async function cerrarCaja(bd: BD, responsableId: number) {
-  return bd.transaction(
-    async (tx) => {
-      const pendientes = await tx.select().from(facturas).where(isNull(facturas.cierreId));
-      if (pendientes.length === 0) throw new ErrorNegocio("No hay facturas pendientes de cierre.");
-      const [cierre] = await tx
-        .insert(cierresCaja)
-        .values({
-          responsableId,
-          total: pendientes.reduce((s, f) => s + f.total, 0),
-          cantidadFacturas: pendientes.length,
-        })
-        .returning();
-      await tx
-        .update(facturas)
-        .set({ cierreId: cierre.id })
-        .where(inArray(facturas.id, pendientes.map((f) => f.id)));
-      return cierre;
-    },
-    { behavior: "immediate" },
-  );
+/** Facturas sin cierre, agrupadas por jornada (de la más antigua a la más reciente). */
+export async function cajaAbierta(bd: BD): Promise<{ jornadas: JornadaPendiente[]; total: number }> {
+  const pendientes = await bd
+    .select()
+    .from(facturas)
+    .where(isNull(facturas.cierreId))
+    .orderBy(asc(facturas.jornada), asc(facturas.numero));
+  const turnos = await bd
+    .select({ jornada: cierresCaja.jornada, ultimo: sql<number>`max(${cierresCaja.turno})` })
+    .from(cierresCaja)
+    .groupBy(cierresCaja.jornada);
+  const ultimoTurno = new Map(turnos.map((t) => [t.jornada, t.ultimo]));
+
+  const jornadas = new Map<string, JornadaPendiente>();
+  for (const f of pendientes) {
+    const j = jornadas.get(f.jornada) ?? {
+      jornada: f.jornada,
+      facturas: [],
+      total: 0,
+      siguienteTurno: (ultimoTurno.get(f.jornada) ?? 0) + 1,
+    };
+    j.facturas.push(f);
+    j.total += f.total;
+    jornadas.set(f.jornada, j);
+  }
+  const lista = [...jornadas.values()];
+  return { jornadas: lista, total: lista.reduce((s, j) => s + j.total, 0) };
+}
+
+/** Registra el cierre del siguiente turno de una jornada con sus facturas pendientes. */
+export async function cerrarCaja(bd: BD, responsableId: number, jornada: string, ahora: Date = new Date()) {
+  if (!FORMATO_JORNADA.test(jornada)) throw new ErrorNegocio("Jornada inválida (AAAA-MM-DD).");
+  if (jornada > diaBogota(ahora)) throw new ErrorNegocio("No se puede cerrar una jornada futura.");
+
+  return bd.transaction(async (tx) => {
+    const pendientes = await tx
+      .select()
+      .from(facturas)
+      .where(and(eq(facturas.jornada, jornada), isNull(facturas.cierreId)));
+    if (pendientes.length === 0) {
+      throw new ErrorNegocio(`No hay facturas pendientes de cierre en la jornada ${jornada}.`);
+    }
+    const [{ ultimo }] = await tx
+      .select({ ultimo: sql<number>`coalesce(max(${cierresCaja.turno}), 0)` })
+      .from(cierresCaja)
+      .where(eq(cierresCaja.jornada, jornada));
+
+    const [cierre] = await tx
+      .insert(cierresCaja)
+      .values({
+        jornada,
+        turno: ultimo + 1,
+        fechaHora: ahora,
+        responsableId,
+        total: pendientes.reduce((s, f) => s + f.total, 0),
+        cantidadFacturas: pendientes.length,
+      })
+      .returning();
+    const asignadas = await tx
+      .update(facturas)
+      .set({ cierreId: cierre.id })
+      .where(
+        and(
+          inArray(
+            facturas.id,
+            pendientes.map((f) => f.id),
+          ),
+          isNull(facturas.cierreId),
+        ),
+      )
+      .returning({ id: facturas.id });
+    if (asignadas.length !== pendientes.length) throw new ErrorNegocio("La caja cambió durante el cierre; intente de nuevo.");
+    return cierre;
+  });
 }
 
 export async function listarCierres(bd: BD, limite = 30) {
   return bd.query.cierresCaja.findMany({
-    orderBy: desc(cierresCaja.fechaHora),
+    orderBy: [desc(cierresCaja.jornada), desc(cierresCaja.turno)],
     limit: limite,
     with: { responsable: { columns: { nombre: true } } },
   });
 }
 
-/** Ventas por día (zona horaria de Bogotá) y productos más vendidos en [desde, hasta), según facturas. */
-export async function reporteVentas(bd: BD, desde: Date, hasta: Date) {
-  const enRango = and(gte(facturas.emitidaEn, desde), lt(facturas.emitidaEn, hasta));
+/**
+ * Reporte por jornada (inclusive) a partir de las facturas: ventas, parte cerrada y pendiente,
+ * turnos cerrados y productos más vendidos.
+ */
+export async function reporteVentas(bd: BD, desdeJornada: string, hastaJornada: string) {
+  const enRango = and(gte(facturas.jornada, desdeJornada), lte(facturas.jornada, hastaJornada));
 
-  const lista = await bd.select().from(facturas).where(enRango).orderBy(asc(facturas.emitidaEn));
-  const porDia = new Map<string, { dia: string; facturas: number; total: number }>();
-  for (const f of lista) {
-    const dia = diaBogota(f.emitidaEn);
-    const fila = porDia.get(dia) ?? { dia, facturas: 0, total: 0 };
-    fila.facturas += 1;
-    fila.total += f.total;
-    porDia.set(dia, fila);
-  }
+  const porJornada = await bd
+    .select({
+      jornada: facturas.jornada,
+      facturas: sql<number>`count(*)`,
+      total: sql<number>`sum(${facturas.total})`,
+      cerrado: sql<number>`coalesce(sum(case when ${facturas.cierreId} is not null then ${facturas.total} end), 0)`,
+      turnos: sql<number>`count(distinct ${facturas.cierreId})`,
+    })
+    .from(facturas)
+    .where(enRango)
+    .groupBy(facturas.jornada)
+    .orderBy(asc(facturas.jornada));
 
   const cantidad = sql<number>`sum(${facturaItems.cantidad})`;
   const platosMasVendidos = await bd
@@ -69,5 +137,10 @@ export async function reporteVentas(bd: BD, desde: Date, hasta: Date) {
     .orderBy(desc(cantidad), asc(facturaItems.descripcion))
     .limit(10);
 
-  return { ventasPorDia: [...porDia.values()], totalPeriodo: lista.reduce((s, f) => s + f.total, 0), platosMasVendidos };
+  const ventasPorJornada = porJornada.map((j) => ({ ...j, pendiente: j.total - j.cerrado }));
+  return {
+    ventasPorJornada,
+    totalPeriodo: ventasPorJornada.reduce((s, j) => s + j.total, 0),
+    platosMasVendidos,
+  };
 }

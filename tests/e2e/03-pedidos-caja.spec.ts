@@ -46,13 +46,15 @@ test("pedido completo: registro, actualización en tiempo real, cobro con factur
   // El pedido facturado sale del tablero del administrador en tiempo real.
   await expect(admin.locator("article", { hasText: "Mesa 3" })).toHaveCount(0, { timeout: 3000 });
 
-  // 4. Cierre de caja por el administrador.
+  // 4. Cierre del turno de la jornada actual (hora de Bogotá) por el administrador.
+  const jornada = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
   await admin.goto("/caja");
-  await expect(admin.getByTestId("total-caja-abierta")).toHaveText(/\$\s?50\.000/);
-  await admin.getByRole("button", { name: "Cerrar caja" }).click();
-  await expect(admin.getByRole("status")).toContainText("1 facturas");
+  const bloque = admin.locator(`[data-jornada="${jornada}"]`);
+  await expect(bloque.getByTestId("total-pendiente")).toHaveText(/\$\s?50\.000/);
+  await bloque.getByRole("button", { name: `Cerrar turno 1 de la jornada ${jornada}` }).click();
+  await expect(admin.getByRole("status")).toContainText(`jornada ${jornada}, turno 1: 1 facturas`);
   await expect(admin.getByTestId("historial-cierres")).toContainText("Administrador");
-  await expect(admin.getByTestId("total-caja-abierta")).toHaveText(/\$\s?0/);
+  await expect(admin.getByText("No hay facturas pendientes.")).toBeVisible();
 
   // 5. El reporte del día incluye la venta.
   await admin.goto("/caja/reportes?dias=1");

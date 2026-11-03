@@ -25,7 +25,7 @@ function migracionesHasta(n: number) {
 }
 
 describe("migraciones v1.0.0 → actual", () => {
-  it("convierte comprobantes en facturas conservando número, total, detalle y cierre", async () => {
+  it("convierte comprobantes en facturas conservando número, total, detalle y cierre, y completa las jornadas", async () => {
     const bd = crearBD(`file:${ARCHIVO_BD}`);
     await migrate(bd, { migrationsFolder: migracionesHasta(1) }); // solo 0000_init (esquema v1.0.0)
 
@@ -55,8 +55,9 @@ describe("migraciones v1.0.0 → actual", () => {
       clienteNombre: "Consumidor final",
       mesaNumero: 5,
       cierreId: 1,
+      jornada: "2029-12-31", // 2029-12-31T23:00Z = 18:00 en Bogotá
     });
-    expect(lista[1]).toMatchObject({ numero: 2, total: 7000, cierreId: null });
+    expect(lista[1]).toMatchObject({ numero: 2, total: 7000, cierreId: null, jornada: "2029-12-31" }); // 01:06Z del 1 ene = 20:06 del 31 dic en Bogotá
     const items = await bd.select().from(facturaItems).orderBy(facturaItems.id);
     expect(items.map((i) => [i.facturaId, i.descripcion, i.valorTotal])).toEqual([
       [lista[0].id, "Bandeja paisa", 32000],
@@ -64,7 +65,7 @@ describe("migraciones v1.0.0 → actual", () => {
       [lista[1].id, "Jugo", 7000],
     ]);
     const [cierre] = await bd.select().from(cierresCaja);
-    expect(cierre).toMatchObject({ total: 46000, cantidadFacturas: 1 });
+    expect(cierre).toMatchObject({ total: 46000, cantidadFacturas: 1, jornada: "2029-12-31", turno: 1 });
     const tablas = await c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='comprobantes'");
     expect(tablas.rows).toHaveLength(0);
     c.close();

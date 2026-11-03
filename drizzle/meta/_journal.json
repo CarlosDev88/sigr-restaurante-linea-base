@@ -29,6 +29,27 @@
       "when": 1793724955380,
       "tag": "0003_eliminar_comprobantes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793725562857,
+      "tag": "0004_jornada_y_turno",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793725563879,
+      "tag": "0005_completar_jornadas",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793725567691,
+      "tag": "0006_indices_jornada",
+      "breakpoints": true
     }
   ]
 }

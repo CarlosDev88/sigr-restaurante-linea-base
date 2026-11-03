@@ -2,7 +2,7 @@
 // Motor: SQLite (archivo local vía libsql). Montos en pesos colombianos enteros (COP).
 // Roles y estados se guardan como texto y se validan en src/lib/domain/constantes.ts.
 import { relations, sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import type { EstadoPedido, EstadoReserva, MedioPago, Rol, TipoDocumento } from "../domain/constantes";
 
 const ahora = sql`(cast(unixepoch('subsec') * 1000 as integer))`;
@@ -83,54 +83,70 @@ export const pedidoItems = sqliteTable("pedido_items", {
   cantidad: integer("cantidad").notNull(),
 });
 
-/** Cierre de caja persistido: una vez creado, su total no cambia. */
-export const cierresCaja = sqliteTable("cierres_caja", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  fechaHora: integer("fecha_hora", { mode: "timestamp_ms" }).notNull().default(ahora),
-  responsableId: integer("responsable_id")
-    .notNull()
-    .references(() => usuarios.id),
-  total: integer("total").notNull(),
-  // Columna con nombre heredado de la v1.0.0 (antes contaba comprobantes; ahora, facturas).
-  cantidadFacturas: integer("cantidad_comprobantes").notNull(),
-});
+/**
+ * Cierre de caja persistido por jornada y turno. Una jornada es un día calendario en hora de
+ * Bogotá (AAAA-MM-DD). Una jornada puede tener varios turnos (cierres); cada cierre agrupa las
+ * facturas pendientes de esa jornada al momento de cerrar. Una vez creado, su total no cambia.
+ */
+export const cierresCaja = sqliteTable(
+  "cierres_caja",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    jornada: text("jornada").notNull().default(""), // AAAA-MM-DD (Bogotá)
+    turno: integer("turno").notNull().default(0), // 1, 2, … dentro de la jornada
+    fechaHora: integer("fecha_hora", { mode: "timestamp_ms" }).notNull().default(ahora),
+    responsableId: integer("responsable_id")
+      .notNull()
+      .references(() => usuarios.id),
+    total: integer("total").notNull(),
+    // Columna con nombre heredado de la v1.0.0 (antes contaba comprobantes; ahora, facturas).
+    cantidadFacturas: integer("cantidad_comprobantes").notNull(),
+  },
+  (t) => [uniqueIndex("cierres_jornada_turno_unico").on(t.jornada, t.turno)],
+);
 
 /**
  * Factura de venta académica. Conserva una copia (instantánea) de los datos del emisor,
  * del cliente y del detalle al momento de emitirla: cambios posteriores en el menú o en la
  * configuración del restaurante no la alteran. NO es una factura electrónica DIAN.
  */
-export const facturas = sqliteTable("facturas", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  prefijo: text("prefijo").notNull().default("FA"),
-  numero: integer("numero").notNull().unique(), // consecutivo único
-  pedidoId: integer("pedido_id")
-    .notNull()
-    .unique() // un pedido se factura una sola vez
-    .references(() => pedidos.id),
-  emitidaEn: integer("emitida_en", { mode: "timestamp_ms" }).notNull().default(ahora),
-  emitidaPorId: integer("emitida_por_id")
-    .notNull()
-    .references(() => usuarios.id),
-  // Emisor (copia)
-  emisorRazonSocial: text("emisor_razon_social").notNull(),
-  emisorNit: text("emisor_nit").notNull(),
-  emisorDireccion: text("emisor_direccion").notNull(),
-  emisorTelefono: text("emisor_telefono").notNull(),
-  // Cliente (opcional: "Consumidor final" si no se identifica)
-  clienteNombre: text("cliente_nombre").notNull().default("Consumidor final"),
-  clienteTipoDocumento: text("cliente_tipo_documento").$type<TipoDocumento>(),
-  clienteNumeroDocumento: text("cliente_numero_documento"),
-  clienteEmail: text("cliente_email"),
-  // Valores (COP enteros, calculados en el servidor)
-  subtotal: integer("subtotal").notNull(), // base sin impuesto
-  tasaImpuestoConsumo: integer("tasa_impuesto_consumo").notNull(), // porcentaje
-  impuestoConsumo: integer("impuesto_consumo").notNull(),
-  total: integer("total").notNull(),
-  medioPago: text("medio_pago").$type<MedioPago>().notNull(),
-  mesaNumero: integer("mesa_numero").notNull(),
-  cierreId: integer("cierre_id").references(() => cierresCaja.id),
-});
+export const facturas = sqliteTable(
+  "facturas",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    prefijo: text("prefijo").notNull().default("FA"),
+    numero: integer("numero").notNull().unique(), // consecutivo único
+    pedidoId: integer("pedido_id")
+      .notNull()
+      .unique() // un pedido se factura una sola vez
+      .references(() => pedidos.id),
+    emitidaEn: integer("emitida_en", { mode: "timestamp_ms" }).notNull().default(ahora),
+    emitidaPorId: integer("emitida_por_id")
+      .notNull()
+      .references(() => usuarios.id),
+    // Emisor (copia)
+    emisorRazonSocial: text("emisor_razon_social").notNull(),
+    emisorNit: text("emisor_nit").notNull(),
+    emisorDireccion: text("emisor_direccion").notNull(),
+    emisorTelefono: text("emisor_telefono").notNull(),
+    // Cliente (opcional: "Consumidor final" si no se identifica)
+    clienteNombre: text("cliente_nombre").notNull().default("Consumidor final"),
+    clienteTipoDocumento: text("cliente_tipo_documento").$type<TipoDocumento>(),
+    clienteNumeroDocumento: text("cliente_numero_documento"),
+    clienteEmail: text("cliente_email"),
+    // Valores (COP enteros, calculados en el servidor)
+    subtotal: integer("subtotal").notNull(), // base sin impuesto
+    tasaImpuestoConsumo: integer("tasa_impuesto_consumo").notNull(), // porcentaje
+    impuestoConsumo: integer("impuesto_consumo").notNull(),
+    total: integer("total").notNull(),
+    medioPago: text("medio_pago").$type<MedioPago>().notNull(),
+    mesaNumero: integer("mesa_numero").notNull(),
+    /** Jornada (día calendario en Bogotá, AAAA-MM-DD) a la que pertenece la venta. */
+    jornada: text("jornada").notNull().default(""),
+    cierreId: integer("cierre_id").references(() => cierresCaja.id),
+  },
+  (t) => [index("facturas_jornada_cierre_idx").on(t.jornada, t.cierreId)],
+);
 
 export const facturaItems = sqliteTable("factura_items", {
   id: integer("id").primaryKey({ autoIncrement: true }),

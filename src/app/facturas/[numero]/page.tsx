@@ -59,8 +59,10 @@ export default async function Factura({ params }: PageProps<"/facturas/[numero]"
           <dd>{ETIQUETA_MEDIO_PAGO[f.medioPago]}</dd>
           <dt className="font-medium">Emitió</dt>
           <dd>{f.emitidaPor.nombre}</dd>
-          <dt className="font-medium">Cierre de caja</dt>
-          <dd>{f.cierre ? `N° ${f.cierre.id}` : "Pendiente"}</dd>
+          <dt className="font-medium">Jornada de caja</dt>
+          <dd>
+            {f.jornada} · {f.cierre ? `cerrada en el turno ${f.cierre.turno}` : "pendiente de cierre"}
+          </dd>
         </dl>
         <table className="tabla mb-3">
           <thead>
