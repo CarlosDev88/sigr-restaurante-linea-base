@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "verificar": "npm run lint && npm run typecheck && npm test && npm run build",
     "db:generate": "drizzle-kit generate",
-    "setup": "npm run db:migrate && npm run db:seed"
+    "setup": "npm run db:migrate && npm run db:seed",
+    "e2e:servidor": "tsx scripts/migrar.ts --reset && tsx scripts/seed.ts && next build && next start"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
