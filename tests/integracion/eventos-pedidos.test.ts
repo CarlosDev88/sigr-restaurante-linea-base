@@ -19,11 +19,11 @@ function solicitud(token?: string, signal?: AbortSignal) {
 }
 
 /** Lee el flujo SSE y devuelve los eventos completos a medida que llegan. */
-function lector(respuesta: Response) {
+function lector(respuesta: Response, ignorar: string[] = ["conexion", "latido"]) {
   const reader = respuesta.body!.getReader();
   const dec = new TextDecoder();
   let buffer = "";
-  return async function siguienteEvento(timeoutMs = 2000): Promise<{ evento: string; datos: unknown } | null> {
+  return async function siguienteEvento(timeoutMs = 2000): Promise<{ evento: string; datos: unknown }> {
     const limite = Date.now() + timeoutMs;
     for (;;) {
       const fin = buffer.indexOf("\n\n");
@@ -32,8 +32,8 @@ function lector(respuesta: Response) {
         buffer = buffer.slice(fin + 2);
         const evento = /^event: (.*)$/m.exec(bloque)?.[1];
         const datos = /^data: (.*)$/m.exec(bloque)?.[1];
-        if (evento && datos) return { evento, datos: JSON.parse(datos) };
-        continue; // retry o latido
+        if (evento && datos && !ignorar.includes(evento)) return { evento, datos: JSON.parse(datos) };
+        continue; // retry, conexion o latido
       }
       const restante = limite - Date.now();
       if (restante <= 0) throw new Error("tiempo agotado esperando evento");
@@ -41,7 +41,7 @@ function lector(respuesta: Response) {
         reader.read(),
         new Promise<never>((_, rej) => setTimeout(() => rej(new Error("tiempo agotado")), restante)),
       ]);
-      if (r.done) return null;
+      if (r.done) return null as unknown as { evento: string; datos: unknown };
       buffer += dec.decode(r.value, { stream: true });
     }
   };
@@ -114,6 +114,17 @@ describe("canal de eventos de pedidos (/api/pedidos/eventos)", () => {
       expect(e.datos.motivo).toEqual({ tipo: "creado", pedidoId: pedido.id });
       expect(e.datos.pedidos).toMatchObject([{ id: pedido.id, mesa: 7, total: 52000 }]);
     }
+  });
+
+  it("informa el intervalo de latido y envía latidos como eventos", async () => {
+    process.env.SSE_LATIDO_MS = "40";
+    const c = new AbortController();
+    controladores.push(c);
+    const r = await GET(solicitud(await firmarSesion({ id: mesero.id, rol: "MESERO" }), c.signal));
+    const siguiente = lector(r, []);
+    expect(await siguiente()).toEqual({ evento: "conexion", datos: { latidoMs: 40 } });
+    expect((await siguiente()).evento).toBe("pedidos");
+    expect((await siguiente()).evento).toBe("latido");
   });
 
   it("libera la suscripción cuando el cliente se desconecta", async () => {

@@ -4,7 +4,7 @@ import { autorizar, PERMISOS } from "@/lib/auth/permisos";
 import { COOKIE_SESION } from "@/lib/auth/token";
 import { db } from "@/lib/db";
 import { instantaneaPedidos, suscribirPedidos } from "@/lib/eventos/pedidos";
-import { configuracionSSE, formatoSSE, LATIDO_SSE, type MotivoCierre } from "@/lib/eventos/sse";
+import { configuracionSSE, formatoSSE, type MotivoCierre } from "@/lib/eventos/sse";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
  * Canal de eventos (Server-Sent Events) del tablero de pedidos.
  *
  * - Autoriza ANTES de abrir el canal: sin sesión → 401, rol sin permiso → 403 (no se envía ningún dato).
- * - Envía una instantánea al conectar y otra después de cada cambio de pedidos.
- * - Cada `latidoMs` envía un latido y vuelve a verificar sesión y rol; si ya no son válidos,
+ * - Envía `conexion` (con el intervalo de latido), una instantánea al conectar y otra después de cada cambio.
+ * - Cada `latidoMs` envía el evento `latido` (el navegador lo usa para detectar cortes silenciosos)
+ *   y vuelve a verificar sesión y rol; si ya no son válidos,
  *   envía `cierre` (SIN_AUTORIZACION) y cierra.
  * - Al cumplir `duracionMaxMs` envía `cierre` (RENOVAR) y cierra; el navegador reconecta y se reautoriza.
  * - Si el cliente se desconecta, se liberan la suscripción y los temporizadores.
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
       };
 
       escribir(`retry: ${reintentoMs}\n\n`);
+      escribir(formatoSSE("conexion", { latidoMs }));
       escribir(formatoSSE("pedidos", await instantaneaPedidos(db, { tipo: "inicial" })));
 
       const desuscribir = suscribirPedidos((i) => escribir(formatoSSE("pedidos", i)));
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
       const latido = setInterval(async () => {
         const vigente = autorizar(await usuarioDesdeToken(db, token), PERMISOS.gestionarPedidos);
         if (!vigente.ok) cerrar("SIN_AUTORIZACION");
-        else escribir(LATIDO_SSE);
+        else escribir(formatoSSE("latido", { t: Date.now() }));
       }, latidoMs);
 
       const limite = setTimeout(() => cerrar("RENOVAR"), duracionMaxMs);

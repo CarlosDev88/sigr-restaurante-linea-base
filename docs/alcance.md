@@ -18,14 +18,21 @@ Versión vigente: **v1.1.0**. La línea base original es **v1.0.0** (etiqueta co
 - El tablero (`/pedidos`) abre un canal **Server-Sent Events** en `GET /api/pedidos/eventos`.
 - **Autorización en el servidor antes de enviar datos:** sin sesión → 401; rol distinto de mesero o administrador → 403. En ambos casos la respuesta es un JSON de error, sin datos de pedidos.
 - Al conectar, el servidor envía una instantánea de los pedidos en curso. Después envía una nueva cada vez que un pedido se **crea**, **cambia de estado**, se **cancela** o se **factura**.
-- Cada `SSE_LATIDO_MS` (15 s por defecto) envía un latido y **vuelve a verificar** la sesión y el rol en la base de datos. Si el usuario perdió el permiso, envía `cierre` (`SIN_AUTORIZACION`) y cierra el canal.
+- Al abrir, el servidor informa su intervalo de latido (evento `conexion`).
+- Cada `SSE_LATIDO_MS` (15 s por defecto) envía el evento `latido` y **vuelve a verificar** la sesión y el rol en la base de datos. Si el usuario perdió el permiso, envía `cierre` (`SIN_AUTORIZACION`) y cierra el canal.
 - Cada `SSE_DURACION_MAX_MS` (10 min por defecto) el servidor cierra la conexión (`cierre`/`RENOVAR`). El navegador se reconecta, lo que obliga a reautorizar.
 - **Desconexión y reconexión en el navegador:**
   - Si la red falla, el navegador reintenta solo y el indicador muestra «reconectando».
+  - **Corte silencioso** (la conexión parece abierta pero no llegan datos, por ejemplo por una red caída sin aviso o un proxy que retiene la respuesta): si pasan 2,5 latidos sin ningún evento (37,5 s con la configuración por defecto; mínimo 5 s), el cliente cierra la conexión y reintenta.
   - Si la conexión queda cerrada, el cliente reintenta con espera exponencial (1 s, 2 s, 4 s… hasta 30 s). Antes de cada intento verifica el acceso; con 401 o 403 deja de insistir y lo indica.
   - Al volver la red (evento `online`) reintenta de inmediato.
   - Al reconectar recibe una instantánea completa, así que **no se pierden cambios** ocurridos durante el corte.
 - **Cierre:** al salir de la página, el cliente cierra el canal. El servidor detecta la desconexión y libera la suscripción y los temporizadores.
+- **Cómo se prueba:**
+  - Las pruebas de unidad cubren con un EventSource simulado la reconexión, la espera exponencial, el corte silencioso y la falta de permiso.
+  - Las de integración usan el canal real: dos sesiones, 401/403 sin datos, pérdida de permiso durante la conexión, renovación y liberación al desconectar.
+  - Las E2E usan Chromium con dos sesiones, un usuario sin permiso, la renovación periódica y la caída de red.
+  - Nota sobre la caída de red: el modo sin conexión de Chromium bloquea las conexiones nuevas, pero no corta una conexión local ya abierta. Por eso la prueba la combina con la renovación periódica: el reintento falla mientras no hay red y se completa al volver, con recuperación de los cambios ocurridos.
 - **Limitación:** el bus de eventos vive en memoria del proceso. Funciona con una sola instancia de la aplicación, igual que SQLite. Varias instancias requerirían un bus compartido, por ejemplo Redis.
 
 ## Facturación

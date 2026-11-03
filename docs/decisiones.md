@@ -52,7 +52,8 @@ Registro breve de las decisiones tomadas para la línea base (formato ADR simpli
 
 - **Vitest:** reglas de dominio puras, autorización y servicios contra una base SQLite de pruebas (`data/test.db`) creada con las mismas migraciones.
 - **Playwright:** la documentación de Next.js recomienda pruebas de extremo a extremo para Server Components asíncronos. Se ejecutan contra la aplicación compilada con su propia base de datos (`data/e2e.db`).
-  - En v1.1.0 incluyen dos sesiones simultáneas, un usuario sin permiso frente al canal de eventos, la renovación de la conexión (`SSE_DURACION_MAX_MS=4000`) y una caída de red simulada (`setOffline`).
+  - En v1.1.0 incluyen dos sesiones simultáneas, un usuario sin permiso frente al canal de eventos, la renovación de la conexión (`SSE_DURACION_MAX_MS=4000`) y una caída de red simulada con `setOffline`, que bloquea las reconexiones (ver [alcance.md](alcance.md#pedidos-en-tiempo-real)).
+  - La detección de cortes silenciosos se prueba con temporizadores simulados en `tests/unit/conexion-eventos.test.ts`.
 - **Migraciones:** una prueba aplica el esquema v1.0.0 con datos y luego las migraciones nuevas.
 
 ## D8. Gestión de la configuración

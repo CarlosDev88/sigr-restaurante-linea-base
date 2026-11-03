@@ -91,6 +91,8 @@ test.describe("pedidos en tiempo real", () => {
     await mesero.goto("/pedidos");
     await expect(estadoConexion(mesero)).toHaveAttribute("data-estado", "conectado");
 
+    // El modo sin conexión de Chromium bloquea las conexiones nuevas (no corta la ya abierta en localhost):
+    // la renovación periódica (SSE_DURACION_MAX_MS=4000) hace que el reintento falle mientras no hay red.
     await contextoMesero.setOffline(true);
     await expect(estadoConexion(mesero)).toHaveAttribute("data-estado", "reconectando", { timeout: 10_000 });
     await expect(estadoConexion(mesero)).toContainText("reconectando");

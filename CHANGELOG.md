@@ -17,6 +17,7 @@ Versión posterior a la línea base. Atiende los hallazgos de la auditoría sobr
   - Canal Server-Sent Events `GET /api/pedidos/eventos`. Responde 401/403 sin datos si la sesión o el rol no son válidos. Envía una instantánea inicial y otra con cada creación, cambio de estado o facturación.
   - El servidor reverifica sesión y rol en cada latido, renueva la conexión periódicamente y libera los recursos al desconectarse el cliente.
   - El cliente indica el estado de la conexión (en vivo, reconectando, sin permiso), reconecta con espera exponencial y verifica el acceso antes de reintentar.
+  - El cliente detecta cortes silenciosos: si pasan 2,5 latidos sin eventos, cierra y reintenta.
 - **Facturación** (`feature/facturacion`):
   - Factura académica persistida (`facturas`, `factura_items`) con número consecutivo único `FA-000001`, fecha, datos del emisor y del cliente (consumidor final o identificado), detalle, base, impuesto al consumo incluido (8 %), total calculado en el servidor y medio de pago.
   - Listado `/facturas` y detalle `/facturas/[numero]`.
