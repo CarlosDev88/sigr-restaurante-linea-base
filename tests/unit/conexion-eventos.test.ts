@@ -33,7 +33,7 @@ function preparar(codigoAcceso = 200) {
   const fuentes: FuenteFalsa[] = [];
   const estados: EstadoConexion[] = [];
   const recibidos: unknown[] = [];
-  const tareas: { fn: () => void; ms: number }[] = [];
+  const tareas: { fn: () => void; ms: number; cancelada?: boolean }[] = [];
   const verificarAcceso = vi.fn(async () => codigoAcceso);
   const conexion = new ConexionEventos<unknown>({
     url: "/api/pedidos/eventos",
@@ -45,16 +45,24 @@ function preparar(codigoAcceso = 200) {
     verificarAcceso,
     alRecibir: (d) => recibidos.push(d),
     alCambiarEstado: (e) => estados.push(e),
-    programar: (fn, ms) => tareas.push({ fn, ms }),
-    cancelar: () => {},
+    programar: (fn, ms) => {
+      const t = { fn, ms };
+      tareas.push(t);
+      return t;
+    },
+    cancelar: (t) => {
+      (t as { cancelada?: boolean }).cancelada = true;
+    },
   });
+  const pendientes = () => tareas.filter((t) => !t.cancelada);
   const ejecutarTarea = async () => {
-    const t = tareas.shift()!;
+    const t = pendientes()[0];
+    tareas.splice(tareas.indexOf(t), 1);
     t.fn();
     await new Promise((r) => setTimeout(r, 0));
     return t.ms;
   };
-  return { conexion, fuentes, estados, recibidos, tareas, verificarAcceso, ejecutarTarea };
+  return { conexion, fuentes, estados, recibidos, tareas, pendientes, verificarAcceso, ejecutarTarea };
 }
 
 describe("formato SSE", () => {
@@ -100,13 +108,13 @@ describe("ConexionEventos", () => {
   });
 
   it("no insiste si el servidor responde 401/403 al verificar el acceso", async () => {
-    const { conexion, fuentes, estados, ejecutarTarea, tareas } = preparar(403);
+    const { conexion, fuentes, estados, ejecutarTarea, pendientes } = preparar(403);
     conexion.iniciar();
     fuentes[0].fallar(CERRADA);
     await ejecutarTarea();
     expect(estados.at(-1)).toBe("sin-permiso");
     expect(fuentes).toHaveLength(1);
-    expect(tareas).toHaveLength(0);
+    expect(pendientes()).toHaveLength(0);
   });
 
   it("el evento de cierre por falta de autorización termina la conexión", () => {
@@ -119,12 +127,36 @@ describe("ConexionEventos", () => {
   });
 
   it("cerrar() libera la conexión y deja de reintentar", () => {
-    const { conexion, fuentes, estados, tareas } = preparar();
+    const { conexion, fuentes, estados, pendientes } = preparar();
     conexion.iniciar();
+    fuentes[0].abrir();
+    fuentes[0].emitir("conexion", { latidoMs: 1000 });
     conexion.cerrar();
     fuentes[0].fallar(CERRADA);
     expect(fuentes[0].cerrada).toBe(true);
-    expect(tareas).toHaveLength(0);
+    expect(pendientes()).toHaveLength(0);
     expect(estados.at(-1)).toBe("cerrado");
+  });
+
+  it("detecta un corte silencioso: sin eventos durante 2,5 latidos cierra y reintenta", async () => {
+    const { conexion, fuentes, estados, pendientes, ejecutarTarea } = preparar(200);
+    conexion.iniciar();
+    fuentes[0].abrir();
+    fuentes[0].emitir("conexion", { latidoMs: 4000 });
+    expect(pendientes().map((t) => t.ms)).toEqual([10_000]); // 2,5 × 4000
+
+    // Cada latido reinicia el plazo.
+    fuentes[0].emitir("latido", { t: 1 });
+    expect(pendientes()).toHaveLength(1);
+
+    // Vence el plazo sin eventos: se cierra la conexión y se programa un reintento.
+    await ejecutarTarea();
+    expect(fuentes[0].cerrada).toBe(true);
+    expect(estados.at(-1)).toBe("reconectando");
+    expect(pendientes().map((t) => t.ms)).toEqual([1000]);
+    await ejecutarTarea();
+    expect(fuentes).toHaveLength(2);
+    fuentes[1].abrir();
+    expect(estados.at(-1)).toBe("conectado");
   });
 });

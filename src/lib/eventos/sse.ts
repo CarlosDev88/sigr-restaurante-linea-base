@@ -3,9 +3,6 @@ export function formatoSSE(evento: string, datos: unknown): string {
   return `event: ${evento}\ndata: ${JSON.stringify(datos)}\n\n`;
 }
 
-/** Comentario SSE: lo ignora el navegador, mantiene viva la conexión. */
-export const LATIDO_SSE = ": latido\n\n";
-
 export type MotivoCierre = "SIN_AUTORIZACION" | "RENOVAR";
 
 /** Parámetros de las conexiones de eventos (configurables por entorno). */
