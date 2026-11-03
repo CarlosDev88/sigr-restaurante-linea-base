@@ -7,6 +7,7 @@ import { PERMISOS } from "@/lib/auth/permisos";
 import { exigirRol } from "@/lib/auth/sesion";
 import { db } from "@/lib/db";
 import { ESTADOS_PEDIDO, type EstadoPedido } from "@/lib/domain/constantes";
+import { publicarCambioPedidos } from "@/lib/eventos/pedidos";
 import { cambiarEstadoPedido, crearPedido } from "@/lib/services/pedidos";
 
 export async function accionCrearPedido(_: EstadoAccion, f: FormData): Promise<EstadoAccion> {
@@ -15,7 +16,8 @@ export async function accionCrearPedido(_: EstadoAccion, f: FormData): Promise<E
     .filter(([clave, valor]) => clave.startsWith("cant_") && Number(valor) > 0)
     .map(([clave, valor]) => ({ platoId: Number(clave.slice(5)), cantidad: valor }));
   try {
-    await crearPedido(db, usuario.id, { mesaId: f.get("mesaId"), items });
+    const pedido = await crearPedido(db, usuario.id, { mesaId: f.get("mesaId"), items });
+    await publicarCambioPedidos(db, { tipo: "creado", pedidoId: pedido.id });
   } catch (e) {
     return aEstadoError(e);
   }
@@ -28,6 +30,7 @@ export async function accionCambiarEstado(pedidoId: number, estado: EstadoPedido
   try {
     if (!ESTADOS_PEDIDO.includes(estado)) return { error: "Estado inválido." };
     await cambiarEstadoPedido(db, pedidoId, estado);
+    await publicarCambioPedidos(db, { tipo: "estado", pedidoId });
     return { mensaje: "Estado actualizado." };
   } catch (e) {
     return aEstadoError(e);
