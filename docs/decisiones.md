@@ -30,21 +30,52 @@ Registro breve de las decisiones tomadas para la línea base (formato ADR simpli
 **Decisión:** no activar `cacheComponents` en la línea base. Todas las rutas se renderizan por solicitud.
 **Consecuencia:** el comportamiento es más simple y predecible. Se puede reevaluar como optimización futura.
 
-## D5. Actualización del tablero por consulta periódica
+## D5. Pedidos en tiempo real con Server-Sent Events (v1.1.0; reemplaza la consulta periódica de v1.0.0)
 
-**Decisión:** consulta cada 5 s (ver [alcance.md](alcance.md#actualización-de-pedidos)). La demora es acotada, no requiere infraestructura adicional y está probada.
+**Contexto:** la auditoría pidió que los cambios de pedidos se vieran en otra sesión sin recargar, con autorización en el servidor y manejo de desconexión. La v1.0.0 consultaba cada 5 s.
+**Decisión:**
+- **Server-Sent Events** (`/api/pedidos/eventos`) y bus de eventos en memoria. El flujo es solo del servidor al navegador, funciona sobre HTTP normal, el navegador reconecta solo y Next.js lo soporta en un Route Handler sin servidor adicional. WebSockets no aporta nada aquí, porque las acciones ya viajan por Server Actions.
+- El canal envía **instantáneas completas** en lugar de diferencias. Así, una reconexión recupera el estado completo sin perder cambios.
+- La autorización ocurre antes de abrir el canal y se repite en cada latido y en cada renovación de la conexión.
+**Consecuencia:** latencia de menos de 1 s en local, frente a hasta 5 s antes. Funciona con una sola instancia del servidor (ver [alcance.md](alcance.md#pedidos-en-tiempo-real)).
 
-## D6. Comprobante interno, no factura electrónica
+## D6. Factura académica persistida (v1.1.0; reemplaza el comprobante interno de v1.0.0)
 
-**Decisión:** ver [alcance.md](alcance.md#comprobante-interno-frente-a-factura-electrónica).
+**Contexto:** la guía del curso menciona facturación; la auditoría pidió una factura persistida con número único, emisor, cliente, detalle y total calculado en el servidor.
+**Decisión:**
+- Las tablas `facturas` y `factura_items` guardan una copia de todos los datos, para conservar el historial.
+- Emitir la factura registra el cobro.
+- Los comprobantes de v1.0.0 se migran a facturas en lugar de convivir con ellas, para que exista un solo documento de venta.
+- No es factura electrónica DIAN (ver [alcance.md](alcance.md#facturación)).
 
 ## D7. Estrategia de pruebas
 
 - **Vitest:** reglas de dominio puras, autorización y servicios contra una base SQLite de pruebas (`data/test.db`) creada con las mismas migraciones.
 - **Playwright:** la documentación de Next.js recomienda pruebas de extremo a extremo para Server Components asíncronos. Se ejecutan contra la aplicación compilada con su propia base de datos (`data/e2e.db`).
+  - En v1.1.0 incluyen dos sesiones simultáneas, un usuario sin permiso frente al canal de eventos, la renovación de la conexión (`SSE_DURACION_MAX_MS=4000`) y una caída de red simulada (`setOffline`).
+- **Migraciones:** una prueba aplica el esquema v1.0.0 con datos y luego las migraciones nuevas.
 
 ## D8. Gestión de la configuración
 
 - Rama estable `main`. Cada módulo se desarrolla en una rama `feature/*` y se integra con `--no-ff`, para que el historial muestre cada integración.
 - Commits con formato *Conventional Commits*.
 - La línea base se marca con la etiqueta anotada `v1.0.0`, creada solo después de que pasan lint, tipos, pruebas unitarias e integración, compilación y E2E.
+- Los cambios posteriores se integran por ramas y se publican como una nueva versión etiquetada: `v1.1.0` (SemVer *minor*, porque agrega funcionalidad). La etiqueta `v1.0.0` no se mueve ni se reescribe.
+- La etiqueta solo se crea después de ejecutar, en un clon limpio, todas las verificaciones y la auditoría de dependencias. Los registros se guardan como evidencia.
+
+## D9. Cierre diario por jornada en hora de Bogotá y turnos (v1.1.0)
+
+**Contexto:** en v1.0.0 un cierre agrupaba todo lo pendiente sin distinguir días.
+**Decisión:**
+- Jornada = día calendario en `America/Bogota`, calculada al emitir y guardada en la factura. Así no depende de la zona horaria del servidor.
+- Se permiten varios cierres (turnos) por jornada, en lugar de bloquear ventas después del cierre. El restaurante puede seguir vendiendo y cerrar de nuevo.
+- Cada cierre se limita a una jornada.
+
+## D10. Escrituras serializadas sobre SQLite (v1.1.0)
+
+**Contexto:** la prueba de facturas simultáneas reveló `SQLITE_BUSY`. Una transacción mantiene el bloqueo de escritura entre `await`s, y otra escritura en ese momento falla. Con `busy_timeout`, el problema es otro: como el motor es síncrono, se bloquea todo el event loop.
+**Decisión:** `src/lib/db/cliente.ts` envuelve el cliente libsql con un cerrojo asíncrono. Las transacciones y escrituras del proceso esperan su turno en orden y las lecturas no esperan. Lo prueba `tests/integracion/concurrencia-bd.test.ts`.
+
+## D11. Hallazgos de seguridad en dependencias (v1.1.0)
+
+Ver [seguridad-dependencias.md](seguridad-dependencias.md).

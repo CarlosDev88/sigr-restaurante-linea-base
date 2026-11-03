@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "SIGR - Gestión de Restaurante",
-  description: "Sistema Integral de Gestión de Restaurante (línea base v1.0.0)",
+  description: "Sistema Integral de Gestión de Restaurante v1.1.0",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           </div>
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
-        <footer className="py-4 text-center text-xs text-stone-500">SIGR v1.0.0 · línea base</footer>
+        <footer className="py-4 text-center text-xs text-stone-500">SIGR v1.1.0 · línea base v1.0.0</footer>
       </body>
     </html>
   );

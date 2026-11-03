@@ -14,7 +14,7 @@ export default function Inicio() {
     <div>
       <h1 className="titulo">Sistema Integral de Gestión de Restaurante</h1>
       <p className="mb-6 text-stone-600">
-        Línea base v1.0.0. Cada módulo exige iniciar sesión con el rol correspondiente.
+        Versión 1.1.0 (línea base: v1.0.0). Cada módulo exige iniciar sesión con el rol correspondiente.
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         {modulos.map((m) => (
