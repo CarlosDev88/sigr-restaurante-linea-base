@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { ETIQUETA_ESTADO_PEDIDO, INTERVALO_ACTUALIZACION_MS, type EstadoPedido } from "@/lib/domain/constantes";
 import type { PedidoResumen } from "@/lib/services/pedidos";
 import { accionCambiarEstado } from "./actions";
+import { BotonCobrar } from "./boton-cobrar";
 
 const pesos = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 const hora = (iso: string) =>
@@ -101,6 +102,7 @@ export function TableroPedidos({ inicial, generadoEn }: Props) {
                     {TEXTO_ACCION[s]}
                   </button>
                 ))}
+              {p.siguientes.includes("PAGADO") && <BotonCobrar pedidoId={p.id} />}
             </div>
           </article>
         ))}
