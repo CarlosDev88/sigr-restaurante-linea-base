@@ -1,8 +1,8 @@
 # SIGR – Sistema Integral de Gestión de Restaurante
 
-Aplicación web para gestionar la operación de un restaurante: autenticación por roles, menú digital, pedidos con seguimiento, reservas, comprobantes internos, cierre de caja y reportes de ventas.
+Aplicación web para gestionar la operación de un restaurante: autenticación por roles, menú digital, pedidos en tiempo real, reservas, facturación académica, cierre diario de caja y reportes de ventas.
 
-Este repositorio contiene la **línea base v1.0.0** (etiqueta Git `v1.0.0`), primer hito estable del proyecto. Los cambios posteriores se registran en [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **v1.1.0** (etiqueta Git `v1.1.0`). La **línea base** original es la etiqueta `v1.0.0`, que se conserva sin cambios. Las diferencias entre versiones están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Tecnologías
 
@@ -54,6 +54,7 @@ npm run dev                 # http://localhost:3000
 | `npm run test:coverage` | Pruebas con reporte de cobertura |
 | `npm run test:e2e` | Pruebas de extremo a extremo (Playwright; la primera vez: `npx playwright install chromium`) |
 | `npm run verificar` | lint + tipos + pruebas + compilación (criterio de la línea base) |
+| `npm run auditoria` | Revisión de dependencias con `npm audit` (ver [docs/seguridad-dependencias.md](docs/seguridad-dependencias.md)) |
 | `npm run db:generate` | Genera una nueva migración SQL a partir de `src/lib/db/schema.ts` |
 | `npm run db:migrate` | Aplica migraciones pendientes |
 | `npm run db:seed` | Carga datos de prueba |
@@ -66,12 +67,12 @@ npm run dev                 # http://localhost:3000
 | Autenticación | `/login` | Todos |
 | Menú público | `/menu` | Público |
 | Administración del menú (CRUD) | `/admin/menu` | Administrador |
-| Pedidos (registro y seguimiento) | `/pedidos`, `/pedidos/nuevo` | Mesero, Administrador |
+| Pedidos (registro y seguimiento en tiempo real) | `/pedidos`, `/pedidos/nuevo`, eventos en `/api/pedidos/eventos` | Mesero, Administrador |
 | Reservas del cliente | `/reservas` | Cliente |
 | Gestión de reservas | `/admin/reservas` | Administrador |
-| Comprobantes | `/comprobantes/[numero]` | Mesero, Administrador |
-| Caja y cierres | `/caja` | Administrador |
-| Reportes de ventas | `/caja/reportes` | Administrador |
+| Facturación (cobro) | `/pedidos/[id]/facturar`, `/facturas`, `/facturas/[numero]` | Mesero, Administrador |
+| Caja: cierre diario por jornada y turno | `/caja` | Administrador |
+| Reportes de ventas por jornada | `/caja/reportes` | Administrador |
 
 ## Estructura de carpetas
 
@@ -86,7 +87,8 @@ sigr/
 │   ├── lib/
 │   │   ├── auth/            Sesión, token y permisos
 │   │   ├── db/              Esquema y cliente de base de datos
-│   │   ├── domain/          Constantes y reglas de negocio puras
+│   │   ├── domain/          Constantes, reglas de negocio puras y datos del restaurante
+│   │   ├── eventos/         Bus de eventos y utilidades SSE (pedidos en tiempo real)
 │   │   └── services/        Lógica de cada módulo (usa la BD)
 │   └── proxy.ts             Verificación optimista de sesión
 └── tests/
@@ -97,7 +99,7 @@ sigr/
 
 ## Convenciones
 
-- Código e identificadores en español para el dominio (pedido, reserva, comprobante) y en inglés para la plataforma (props, hooks).
+- Código e identificadores en español para el dominio (pedido, reserva, factura) y en inglés para la plataforma (props, hooks).
 - Toda página protegida, Server Action y Route Handler valida el rol en el servidor con `exigirRol()` o `autorizar()`. Una prueba automática (`tests/unit/autorizacion-en-servidor.test.ts`) lo verifica.
 - Las reglas de negocio viven en `src/lib/services` y `src/lib/domain`, no en los componentes.
 - Montos en pesos colombianos enteros (COP). Fechas guardadas en UTC y mostradas en hora de Bogotá (UTC-5).
@@ -107,8 +109,9 @@ sigr/
 
 - [Estructura de la base de datos](docs/estructura-bd.md)
 - [Manual de despliegue](docs/despliegue.md)
-- [Alcance de la línea base](docs/alcance.md)
+- [Alcance funcional (pedidos en tiempo real, facturación, cierre diario)](docs/alcance.md)
 - [Decisiones técnicas](docs/decisiones.md)
+- [Seguridad de dependencias](docs/seguridad-dependencias.md)
 
 ## Licencia
 
