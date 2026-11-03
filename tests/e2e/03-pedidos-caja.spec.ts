@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test";
-import { INTERVALO_ACTUALIZACION_MS } from "../../src/lib/domain/constantes";
 import { iniciarSesion } from "./utilidades";
 
-test("pedido completo: registro, actualización automática, cobro con comprobante y cierre de caja", async ({ browser }) => {
+test("pedido completo: registro, actualización en tiempo real, cobro con comprobante y cierre de caja", async ({ browser }) => {
   // Dos pantallas independientes: el administrador observa el tablero y el mesero registra.
   const admin = await (await browser.newContext()).newPage();
   const mesero = await (await browser.newContext()).newPage();
@@ -21,9 +20,9 @@ test("pedido completo: registro, actualización automática, cobro con comproban
   const tarjetaMesero = mesero.locator("article", { hasText: "Mesa 3" });
   await expect(tarjetaMesero).toContainText(/Total: \$\s?50\.000/);
 
-  // 2. Sin recargar, el tablero del administrador lo muestra dentro del intervalo de actualización.
+  // 2. Sin recargar, el tablero del administrador lo recibe por eventos (límite: 3 s).
   await expect(admin.locator("article", { hasText: "Mesa 3" })).toBeVisible({
-    timeout: INTERVALO_ACTUALIZACION_MS + 3000,
+    timeout: 3000,
   });
 
   // 3. Cambios de estado y cobro.
@@ -32,7 +31,7 @@ test("pedido completo: registro, actualización automática, cobro con comproban
   await tarjetaMesero.getByRole("button", { name: "Marcar entregado" }).click();
   await expect(tarjetaMesero.locator("[data-estado]")).toHaveText("Entregado");
   await expect(admin.locator("article", { hasText: "Mesa 3" }).locator("[data-estado]")).toHaveText("Entregado", {
-    timeout: INTERVALO_ACTUALIZACION_MS + 3000,
+    timeout: 3000,
   });
   await tarjetaMesero.getByRole("button", { name: "Cobrar y emitir comprobante" }).click();
   await expect(mesero).toHaveURL(/\/comprobantes\/1$/);

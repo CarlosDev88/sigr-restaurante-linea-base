@@ -2,14 +2,13 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { usuarios } from "../db/schema";
 import type { Rol } from "../domain/constantes";
 import { autorizar, type UsuarioSesion } from "./permisos";
-import { DURACION_SESION_SEG, firmarSesion, verificarSesion } from "./token";
+import { usuarioDesdeToken } from "./acceso";
+import { COOKIE_SESION, DURACION_SESION_SEG, firmarSesion } from "./token";
 
-export const COOKIE_SESION = "sigr_sesion";
+export { COOKIE_SESION };
 
 function cookieSegura() {
   return process.env.NODE_ENV === "production" && process.env.COOKIE_SEGURA !== "false";
@@ -34,15 +33,9 @@ export async function cerrarSesion() {
  * Usuario de la solicitud actual. Verifica la firma del token y vuelve a leer el usuario
  * en la base de datos, de modo que el rol vigente es siempre el almacenado.
  */
-export const obtenerUsuarioActual = cache(async (): Promise<UsuarioSesion | null> => {
-  const datos = await verificarSesion((await cookies()).get(COOKIE_SESION)?.value);
-  if (!datos) return null;
-  const [u] = await db
-    .select({ id: usuarios.id, nombre: usuarios.nombre, email: usuarios.email, rol: usuarios.rol })
-    .from(usuarios)
-    .where(eq(usuarios.id, datos.id));
-  return u ?? null;
-});
+export const obtenerUsuarioActual = cache(async (): Promise<UsuarioSesion | null> =>
+  usuarioDesdeToken(db, (await cookies()).get(COOKIE_SESION)?.value),
+);
 
 /**
  * Exige un usuario con alguno de los roles indicados. Se llama al inicio de cada página

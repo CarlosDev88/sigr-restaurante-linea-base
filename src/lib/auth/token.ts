@@ -1,6 +1,9 @@
 import { jwtVerify, SignJWT } from "jose";
 import { ROLES, type Rol } from "../domain/constantes";
 
+/** Nombre de la cookie que guarda el token de sesión. */
+export const COOKIE_SESION = "sigr_sesion";
+
 export interface DatosSesion {
   id: number;
   rol: Rol;

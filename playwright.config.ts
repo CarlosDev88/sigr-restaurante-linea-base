@@ -23,6 +23,10 @@ export default defineConfig({
     env: {
       DATABASE_URL: "file:./data/e2e.db",
       SESSION_SECRET: "clave-solo-para-pruebas-e2e-0123456789abcdef",
+      // Conexiones de eventos cortas para ejercitar la renovación y reconexión en las pruebas.
+      SSE_DURACION_MAX_MS: "4000",
+      SSE_REINTENTO_MS: "500",
+      SSE_LATIDO_MS: "1000",
     },
   },
 });

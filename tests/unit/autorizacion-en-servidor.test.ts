@@ -36,7 +36,7 @@ describe("autorización en el servidor", () => {
 
   for (const archivo of archivos(APP, "route.ts")) {
     it(`${path.relative(APP, archivo)} verifica el rol`, () => {
-      expect(readFileSync(archivo, "utf8")).toMatch(/autorizar\(await obtenerUsuarioActual\(\)/);
+      expect(readFileSync(archivo, "utf8")).toMatch(/autorizar\(await (obtenerUsuarioActual\(\)|usuarioDesdeToken\()/);
     });
   }
 

@@ -24,13 +24,6 @@ export const HORA_ULTIMA_RESERVA = 21; // 21:00 (último inicio permitido)
 export const ZONA_HORARIA = "America/Bogota";
 export const OFFSET_BOGOTA = "-05:00";
 
-/**
- * Intervalo de actualización automática del tablero de pedidos.
- * Un cambio de estado puede tardar hasta este tiempo (más la latencia de red)
- * en verse en otra pantalla.
- */
-export const INTERVALO_ACTUALIZACION_MS = 5000;
-
 export const ETIQUETA_ESTADO_PEDIDO: Record<EstadoPedido, string> = {
   PENDIENTE: "Pendiente",
   EN_PREPARACION: "En preparación",

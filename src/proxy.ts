@@ -1,7 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { verificarSesion } from "@/lib/auth/token";
-
-const COOKIE_SESION = "sigr_sesion";
+import { COOKIE_SESION, verificarSesion } from "@/lib/auth/token";
 
 /**
  * Verificación optimista: si no hay sesión válida, redirige a /login antes de renderizar.
