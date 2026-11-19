@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 const APP = path.resolve(__dirname, "../../src/app");
 const ACCIONES_PUBLICAS = ["iniciarSesion", "salir"];
+/** Route Handlers públicos a propósito (no devuelven datos de negocio). */
+const RUTAS_API_PUBLICAS = ["api/salud/route.ts"];
 
 function archivos(dir: string, nombre: string): string[] {
   return readdirSync(dir).flatMap((f) => {
@@ -35,6 +37,7 @@ describe("autorización en el servidor", () => {
   }
 
   for (const archivo of archivos(APP, "route.ts")) {
+    if (RUTAS_API_PUBLICAS.includes(path.relative(APP, archivo))) continue;
     it(`${path.relative(APP, archivo)} verifica el rol`, () => {
       expect(readFileSync(archivo, "utf8")).toMatch(/autorizar\(await (obtenerUsuarioActual\(\)|usuarioDesdeToken\()/);
     });

@@ -25,6 +25,9 @@ export default defineConfig({
     coverage: {
       include: ["src/lib/**"],
       exclude: ["src/lib/db.ts"],
+      reporter: ["text", "json-summary", "html"],
+      // Umbral mínimo de calidad: el pipeline falla si la cobertura baja de estos valores.
+      thresholds: { lines: 80, statements: 80, branches: 70, functions: 70 },
     },
   },
 });

@@ -4,19 +4,25 @@ const PUERTO = 3100;
 
 // Pruebas de extremo a extremo contra la aplicación compilada (next build + next start)
 // usando una base de datos SQLite propia (data/e2e.db) recreada en cada ejecución.
+// En el pipeline (E2E_BUILD_LISTO=1) se reutiliza la compilación del job anterior.
+const COMANDO = process.env.E2E_BUILD_LISTO
+  ? `npm run e2e:bd && npx next start -p ${PUERTO}`
+  : `npm run e2e:servidor -- -p ${PUERTO}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: process.env.CI
+    ? [["github"], ["list"], ["html", { open: "never" }], ["junit", { outputFile: "reportes/e2e-junit.xml" }]]
+    : [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: `http://localhost:${PUERTO}`,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npm run e2e:servidor -- -p ${PUERTO}`,
+    command: COMANDO,
     url: `http://localhost:${PUERTO}/menu`,
     reuseExistingServer: false,
     timeout: 240_000,

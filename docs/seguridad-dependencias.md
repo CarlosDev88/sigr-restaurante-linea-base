@@ -1,20 +1,28 @@
 # Revisión de seguridad de dependencias
 
-Revisión hecha con `npm audit` (registro público de npm) sobre `package-lock.json` de la versión **v1.1.0**, en un clon limpio. Los registros completos están en la carpeta de evidencias de la versión (`07-npm-audit-produccion.txt`, `07-npm-audit-completo.txt` y `.json`, `07-npm-ls-esbuild.txt`). Comando reproducible: `npm run auditoria`.
+Comando reproducible: `npm run auditoria`. El pipeline lo ejecuta en cada push y cada PR (etapa 3), así que este registro se mantiene con cada versión.
 
-## Resumen
+## Estado actual (v1.2.0)
 
 | Alcance | Crítica | Alta | Moderada | Baja |
 |---|---|---|---|---|
-| **Dependencias de producción** (`--omit=dev`): lo que se ejecuta en el servidor | 0 | 0 | 0 | 0 |
-| Dependencias de desarrollo: herramientas de lint, migración y pruebas | 0 | 0 | 16 | 0 |
+| Dependencias de producción (`--omit=dev`) | 0 | 0 | 0 | 0 |
+| Todas las dependencias | 0 | 0 | 0 | 0 |
 
-## Hallazgos y tratamiento
+Controles automáticos adicionales del pipeline:
 
-| # | Aviso | Paquete y ruta | Severidad | Tratamiento |
+- Revisión de dependencias nuevas en cada PR (`dependency-review-action`, falla con severidad alta).
+- Escaneo de la imagen Docker con Grype (falla con vulnerabilidades críticas corregibles).
+- CodeQL sobre el código.
+- Dependabot semanal.
+
+## Historial de hallazgos y tratamiento
+
+| Versión | Aviso | Paquete | Severidad | Tratamiento |
 |---|---|---|---|---|
-| 1 | [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99): el servidor de desarrollo de esbuild permite que un sitio externo lea sus respuestas | `esbuild` ≤ 0.24.2, vía `drizzle-kit` → `@esbuild-kit/core-utils` | Moderada | **Mitigado.** `overrides` en `package.json` fuerza `esbuild@^0.25` para `@esbuild-kit/core-utils`. Se comprobó que `drizzle-kit generate` y `drizzle-kit check` siguen funcionando. Además, SIGR no usa el servidor de desarrollo de esbuild. Con esto se eliminaron 4 de los 20 avisos iniciales. |
-| 2 | [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249): posible denegación de servicio en `minimatch` con patrones glob maliciosos | `minimatch` < 11.0.1, vía `eslint` 9, `eslint-config-next` 16.4.4 y sus plugins (16 entradas en el informe; la causa raíz es una sola) | Moderada | **Riesgo aceptado (solo desarrollo).** ESLint solo procesa patrones definidos en el propio repositorio, no entradas de usuarios, y no forma parte de la aplicación desplegada. La corrección que propone `npm audit fix --force` es un *downgrade* incompatible (`eslint@4`, `eslint-config-next@0.2.4`), por eso no se aplica. Se revisará cuando ESLint y `eslint-config-next` publiquen versiones con `minimatch` ≥ 11.0.1. |
+| v1.1.0 | [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99): el servidor de desarrollo de esbuild permite lecturas desde otros sitios | `esbuild` ≤ 0.24.2, vía `drizzle-kit` | Moderada | **Mitigado.** `overrides` fuerza `esbuild@^0.25`. Se comprobó que `drizzle-kit generate` y `check` siguen funcionando. |
+| v1.1.0 | [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249): posible denegación de servicio en `minimatch` | `minimatch`, vía ESLint (solo desarrollo) | Moderada | En v1.1.0 se aceptó el riesgo, porque solo afectaba herramientas de desarrollo. **Corregido en v1.2.0** con `npm audit fix` (sin cambios incompatibles). |
+| v1.2.0 | [GHSA-mfr8-8qww-v76h](https://github.com/advisories/GHSA-mfr8-8qww-v76h) y [GHSA-vc7v-qv4w-wrv8](https://github.com/advisories/GHSA-vc7v-qv4w-wrv8): fuga de información entre valores de *root params* en funciones `use cache` | `next` 16.2.0–16.4.4 (**producción**) | Moderada | **Corregido:** actualización a `next@16.4.6`. SIGR no usa `use cache`, pero la versión afectada hacía fallar `next build` y la auditoría de producción, así que se actualizó. |
 
 ## Otras verificaciones relacionadas
 

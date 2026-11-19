@@ -17,7 +17,9 @@ export async function migrarBD(url: string, reiniciar = false) {
     }
   }
   const bd = crearBD(url);
-  await migrate(bd, { migrationsFolder: path.resolve(__dirname, "../drizzle") });
+  // MIGRACIONES_DIR permite ubicar las migraciones cuando el script se ejecuta empaquetado (Docker).
+  const carpeta = process.env.MIGRACIONES_DIR ?? path.resolve(__dirname, "../drizzle");
+  await migrate(bd, { migrationsFolder: carpeta });
   bd.$client.close();
 }
 

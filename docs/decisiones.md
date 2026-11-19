@@ -80,3 +80,18 @@ Registro breve de las decisiones tomadas para la línea base (formato ADR simpli
 ## D11. Hallazgos de seguridad en dependencias (v1.1.0)
 
 Ver [seguridad-dependencias.md](seguridad-dependencias.md).
+
+## D12. Pipeline CI/CD en GitHub Actions con imagen Docker (v1.2.0)
+
+**Contexto:** la unidad 3 pide automatizar la compilación, las pruebas y el despliegue. El código ya está en GitHub.
+
+**Decisión:**
+- **GitHub Actions** en lugar de Jenkins: no requiere servidor propio, está integrado con PR, entornos y paquetes, y es gratuito para repositorios públicos.
+- Las etapas son jobs encadenados con `needs`, así cada fallo detiene las siguientes.
+- La compilación se hace una vez y E2E reutiliza el artefacto.
+- **Docker** como unidad de despliegue: la misma imagen pasa por staging y se promueve a producción.
+- Staging efímero en el runner, para tener un entorno real sin costo de infraestructura.
+- Producción simulada mediante la promoción de la imagen en GHCR, con aprobación manual.
+
+**Consecuencia:** cada cambio queda verificado de la misma forma, y las evidencias quedan en la pestaña *Actions* con artefactos descargables. Ver [pipeline.md](pipeline.md).
+

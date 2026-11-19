@@ -21,6 +21,9 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "coverage/**",
+    "reportes/**",
+    // Scripts empaquetados para Docker (generados)
+    "dist/**",
   ]),
 ]);
 

@@ -49,6 +49,9 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 
-# archivos que genera `next dev` para asistentes de IA
+# archivo que genera `next dev` para asistentes de código
 AGENTS.md
-CLAUDE.md
+
+# scripts empaquetados para la imagen Docker y reportes del pipeline
+/dist/
+/reportes/

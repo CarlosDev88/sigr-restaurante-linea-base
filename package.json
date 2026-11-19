@@ -1,6 +1,6 @@
 {
   "name": "sigr",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -17,15 +17,18 @@
     "verificar": "npm run lint && npm run typecheck && npm test && npm run build",
     "db:generate": "drizzle-kit generate",
     "setup": "npm run db:migrate && npm run db:seed",
-    "e2e:servidor": "tsx scripts/migrar.ts --reset && tsx scripts/seed.ts && next build && next start",
-    "auditoria": "npm audit --omit=dev && npm audit --audit-level=high"
+    "e2e:servidor": "npm run e2e:bd && next build && next start",
+    "auditoria": "npm audit --omit=dev && npm audit --audit-level=high",
+    "e2e:bd": "tsx scripts/migrar.ts --reset && tsx scripts/seed.ts",
+    "build:scripts": "esbuild scripts/migrar.ts scripts/seed.ts --bundle --platform=node --format=cjs --target=node20 --packages=external --outdir=dist/scripts",
+    "test:carga": "k6 run tests/carga/staging.js"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.15",
-    "next": "16.4.4",
+    "next": "16.4.6",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
@@ -39,8 +42,9 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^5.1.0",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "0.28.2",
     "eslint": "^9",
-    "eslint-config-next": "16.4.4",
+    "eslint-config-next": "16.4.6",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",

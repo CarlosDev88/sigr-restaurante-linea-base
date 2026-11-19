@@ -1,8 +1,11 @@
 # SIGR – Sistema Integral de Gestión de Restaurante
 
+[![CI/CD SIGR](https://github.com/CarlosDev88/sigr-restaurante-linea-base/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/CarlosDev88/sigr-restaurante-linea-base/actions/workflows/ci-cd.yml)
+[![CodeQL](https://github.com/CarlosDev88/sigr-restaurante-linea-base/actions/workflows/codeql.yml/badge.svg)](https://github.com/CarlosDev88/sigr-restaurante-linea-base/actions/workflows/codeql.yml)
+
 Aplicación web para gestionar la operación de un restaurante: autenticación por roles, menú digital, pedidos en tiempo real, reservas, facturación académica, cierre diario de caja y reportes de ventas.
 
-Versión actual: **v1.1.0** (etiqueta Git `v1.1.0`). La **línea base** original es la etiqueta `v1.0.0`, que se conserva sin cambios. Las diferencias entre versiones están en [CHANGELOG.md](CHANGELOG.md).
+Versión actual: **v1.2.0**, que agrega el pipeline CI/CD, la imagen Docker y la verificación de salud. Versiones anteriores: `v1.1.0` (correcciones de auditoría) y la **línea base** `v1.0.0`, que se conserva sin cambios. Las diferencias están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Tecnologías
 
@@ -54,11 +57,37 @@ npm run dev                 # http://localhost:3000
 | `npm run test:coverage` | Pruebas con reporte de cobertura |
 | `npm run test:e2e` | Pruebas de extremo a extremo (Playwright; la primera vez: `npx playwright install chromium`) |
 | `npm run verificar` | lint + tipos + pruebas + compilación (criterio de la línea base) |
+| `npm run build:scripts` | Empaqueta los scripts de migración y de datos iniciales para la imagen Docker |
+| `npm run test:carga` | Prueba de carga con k6 contra `BASE_URL` (ver [docs/pipeline.md](docs/pipeline.md)) |
 | `npm run auditoria` | Revisión de dependencias con `npm audit` (ver [docs/seguridad-dependencias.md](docs/seguridad-dependencias.md)) |
 | `npm run db:generate` | Genera una nueva migración SQL a partir de `src/lib/db/schema.ts` |
 | `npm run db:migrate` | Aplica migraciones pendientes |
 | `npm run db:seed` | Carga datos de prueba |
 | `npm run db:reset` | Borra la BD local y la recrea con datos de prueba |
+
+## Pipeline CI/CD y Docker
+
+Cada push y cada PR ejecutan en GitHub Actions estas etapas, en orden:
+
+1. Validación estática.
+2. Pruebas unitarias y de integración.
+3. Seguridad de dependencias.
+4. Construcción.
+5. Pruebas E2E.
+6. Imagen Docker con escaneo.
+
+Además:
+
+- **Merge a `main`:** despliega en un *staging* efímero con pruebas de humo y de carga.
+- **Etiqueta `v*`:** promueve la imagen a producción, previa aprobación.
+
+Detalle en [docs/pipeline.md](docs/pipeline.md).
+
+```bash
+docker build -t sigr:local .
+docker run -d -p 3000:3000 -e SESSION_SECRET=<clave-de-32-o-mas-caracteres> -e SEMBRAR_DATOS_DEMO=1 -e COOKIE_SEGURA=false sigr:local
+curl http://localhost:3000/api/salud
+```
 
 ## Módulos
 
@@ -79,8 +108,10 @@ npm run dev                 # http://localhost:3000
 ```
 sigr/
 ├── drizzle/                 Migraciones SQL versionadas
+├── .github/                 Workflows de GitHub Actions (CI/CD, CodeQL), Dependabot y plantilla de PR
+├── docker/                  Script de arranque del contenedor
 ├── docs/                    Documentación técnica
-├── scripts/                 migrar.ts y seed.ts
+├── scripts/                 migrar.ts, seed.ts y scripts del pipeline (ci/)
 ├── src/
 │   ├── app/                 Páginas, Server Actions (actions.ts) y API (api/)
 │   ├── components/          Componentes compartidos
@@ -112,6 +143,7 @@ sigr/
 - [Alcance funcional (pedidos en tiempo real, facturación, cierre diario)](docs/alcance.md)
 - [Decisiones técnicas](docs/decisiones.md)
 - [Seguridad de dependencias](docs/seguridad-dependencias.md)
+- [Pipeline CI/CD](docs/pipeline.md)
 
 ## Licencia
 

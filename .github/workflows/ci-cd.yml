@@ -1,0 +1,295 @@
+# Pipeline CI/CD de SIGR (Sistema Integral de Gestión de Restaurante)
+#
+#   1 Validación estática ─┬─► 2 Pruebas unit./integración ─┐
+#                          └─► 3 Seguridad de dependencias ──┴─► 4 Construcción ─► 5 E2E ─► 6 Imagen Docker + escaneo
+#                                                                                                  │
+#                                       (main o etiqueta v*) 7 Staging: despliegue + humo + carga ◄┘
+#                                       (solo etiqueta v*)   8 Producción: promoción con aprobación ◄┘
+#
+# Cada etapa es una puerta de calidad: si falla, las siguientes no se ejecutan.
+# Las acciones de terceros se fijan por SHA (comentario con la versión) para evitar cambios no revisados.
+
+name: CI/CD SIGR
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**", "demo/**"]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  # Clave solo para pruebas automáticas (no es un secreto de producción).
+  SESSION_SECRET: clave-solo-para-ci-0123456789abcdef0123456789
+  IMAGEN_LOCAL: sigr:ci
+
+jobs:
+  validacion:
+    name: 1 · Validación estática
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Instalar dependencias (exactas, según package-lock.json)
+        run: npm ci --no-audit --no-fund
+      - name: Lint (ESLint)
+        run: npm run lint
+      - name: Tipos (TypeScript)
+        run: npm run typecheck
+      - name: Migraciones sincronizadas con el esquema
+        run: npx drizzle-kit check
+
+  pruebas:
+    name: 2 · Pruebas unitarias e integración
+    needs: validacion
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Vitest con cobertura (falla si baja de los umbrales)
+        run: npx vitest run --coverage --reporter=default --reporter=junit --outputFile.junit=reportes/vitest-junit.xml
+      - name: Resumen de cobertura
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e '
+              const t = require("./coverage/coverage-summary.json").total;
+              const f = (k) => `| ${k} | ${t[k].pct} % | ${t[k].covered}/${t[k].total} |`;
+              console.log(["### Cobertura (src/lib)", "| Métrica | % | Cubiertas |", "|---|---|---|",
+                f("lines"), f("statements"), f("branches"), f("functions")].join("\n"));
+            ' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reporte-pruebas
+          path: |
+            coverage/
+            reportes/
+          retention-days: 14
+
+  seguridad:
+    name: 3 · Seguridad de dependencias
+    needs: validacion
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: npm audit (producción sin hallazgos; ninguna dependencia alta o crítica)
+        run: npm run auditoria
+      - name: Revisión de dependencias nuevas del PR
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
+        with:
+          fail-on-severity: high
+
+  construccion:
+    name: 4 · Construcción
+    needs: [pruebas, seguridad]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: next build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: compilacion-next
+          path: |
+            .next/
+            !.next/cache/
+          include-hidden-files: true
+          retention-days: 3
+
+  e2e:
+    name: 5 · Pruebas E2E (navegador)
+    needs: construccion
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: compilacion-next
+          path: .next
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Playwright (13 flujos de usuario sobre la compilación del paso 4)
+        run: npx playwright test
+        env:
+          E2E_BUILD_LISTO: "1"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reporte-e2e
+          path: |
+            playwright-report/
+            reportes/
+            test-results/
+          retention-days: 14
+
+  imagen:
+    name: 6 · Imagen Docker y escaneo
+    needs: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      imagen: ${{ steps.nombre.outputs.imagen }}
+      version: ${{ steps.nombre.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Nombre y versión de la imagen
+        id: nombre
+        run: |
+          echo "imagen=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Construir imagen (Dockerfile multietapa)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: ${{ env.IMAGEN_LOCAL }}
+          build-args: |
+            APP_VERSION=${{ steps.nombre.outputs.version }}
+            GIT_SHA=${{ github.sha }}
+            REPO_URL=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Escanear vulnerabilidades de la imagen (Grype; falla con críticas corregibles)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ env.IMAGEN_LOCAL }}
+          fail-build: true
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+      - name: Guardar imagen para el despliegue
+        run: docker save "$IMAGEN_LOCAL" | gzip > sigr-imagen.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: imagen-docker
+          path: sigr-imagen.tar.gz
+          retention-days: 3
+      - name: Publicar en GitHub Container Registry (solo main y etiquetas)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          IMAGEN: ${{ steps.nombre.outputs.imagen }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USUARIO: ${{ github.actor }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USUARIO" --password-stdin
+          docker tag "$IMAGEN_LOCAL" "$IMAGEN:sha-${GITHUB_SHA::7}"
+          docker push "$IMAGEN:sha-${GITHUB_SHA::7}"
+          echo "Imagen publicada: \`$IMAGEN:sha-${GITHUB_SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  staging:
+    name: 7 · Staging (despliegue, humo y carga)
+    needs: imagen
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: imagen-docker
+      - name: Desplegar contenedor de staging
+        run: |
+          docker load < sigr-imagen.tar.gz
+          docker run -d --name sigr-staging -p 3000:3000 \
+            -e SESSION_SECRET="$SESSION_SECRET" \
+            -e COOKIE_SEGURA=false \
+            -e SEMBRAR_DATOS_DEMO=1 \
+            "$IMAGEN_LOCAL"
+      - name: Esperar disponibilidad (/api/salud)
+        run: bash scripts/ci/esperar-salud.sh http://localhost:3000
+      - name: Pruebas de humo
+        run: bash scripts/ci/pruebas-humo.sh http://localhost:3000 | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: grafana/setup-k6-action@c47136d33d365efbeb9ae7266908b5dcf98cdece # v1.3.0
+        with:
+          k6-version: "2.4.0"
+      - name: Prueba de carga (k6, umbrales de rendimiento y errores)
+        run: |
+          mkdir -p reportes
+          k6 run tests/carga/staging.js
+        env:
+          BASE_URL: http://localhost:3000
+      - name: Estado del contenedor (HEALTHCHECK de Docker)
+        if: always()
+        run: |
+          docker inspect --format 'Salud del contenedor: {{.State.Health.Status}}' sigr-staging || true
+          docker logs sigr-staging > reportes/staging.log 2>&1 || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: reporte-staging
+          path: reportes/
+          retention-days: 14
+
+  produccion:
+    name: 8 · Producción (promoción con aprobación)
+    needs: [imagen, staging]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Configurar en GitHub: Settings → Environments → produccion → Required reviewers.
+    environment: produccion
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Promover la imagen probada en staging (sin recompilar)
+        env:
+          IMAGEN: ${{ needs.imagen.outputs.imagen }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USUARIO: ${{ github.actor }}
+        run: |
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USUARIO" --password-stdin
+          VERSION="${GITHUB_REF_NAME#v}"
+          docker buildx imagetools create \
+            -t "$IMAGEN:$VERSION" -t "$IMAGEN:latest" \
+            "$IMAGEN:sha-${GITHUB_SHA::7}"
+          {
+            echo "### Promoción a producción"
+            echo "- Imagen: \`$IMAGEN:$VERSION\` (también \`latest\`)"
+            echo "- Origen: \`$IMAGEN:sha-${GITHUB_SHA::7}\`, la misma que pasó staging"
+            echo "- Despliegue simulado: en un servidor real se ejecutaría \`docker pull\` y reinicio del servicio"
+          } >> "$GITHUB_STEP_SUMMARY"

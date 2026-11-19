@@ -1,6 +1,6 @@
 # Manual de despliegue
 
-Aplica a la versión **v1.1.0**. Para desplegar la línea base original use la etiqueta `v1.0.0`.
+Aplica desde la versión **v1.1.0**; la v1.2.0 agrega la imagen Docker. Para desplegar la línea base original use la etiqueta `v1.0.0`.
 
 ## 1. Requisitos
 
@@ -53,6 +53,25 @@ location /api/pedidos/eventos {
     proxy_read_timeout 15m;   # mayor que SSE_DURACION_MAX_MS
 }
 ```
+
+### Con Docker (v1.2.0)
+
+La imagen se publica en `ghcr.io/carlosdev88/sigr-restaurante-linea-base`:
+
+- En cada merge a `main` se publica como `sha-<commit>`.
+- En cada versión aprobada se publica como `<versión>` y `latest`.
+
+```bash
+docker run -d --name sigr -p 3000:3000 \
+  -e SESSION_SECRET=<clave-de-32-o-mas-caracteres> \
+  -v sigr-datos:/app/data \
+  ghcr.io/carlosdev88/sigr-restaurante-linea-base:latest
+```
+
+- Al iniciar, el contenedor aplica las migraciones pendientes.
+- Con `-e SEMBRAR_DATOS_DEMO=1` carga los usuarios y el menú de prueba.
+- La BD vive en el volumen `/app/data`.
+- El estado se consulta en `/api/salud`; Docker lo usa en su `HEALTHCHECK`.
 
 ## 4. Actualización desde v1.0.0
 

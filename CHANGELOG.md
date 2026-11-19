@@ -7,6 +7,34 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 Nada todavía.
 
+## [1.2.0] - 2026-11-19 — Pipeline CI/CD
+
+### Agregado
+
+- **Pipeline CI/CD en GitHub Actions** (`.github/workflows/ci-cd.yml`), con 8 etapas encadenadas:
+  1. Validación estática: lint, tipos y migraciones.
+  2. Pruebas unitarias e integración, con umbral de cobertura.
+  3. Seguridad de dependencias.
+  4. Construcción.
+  5. E2E con Playwright.
+  6. Imagen Docker con escaneo Grype y publicación en GHCR.
+  7. Staging: despliegue, pruebas de humo y carga con k6.
+  8. Producción: promoción de la misma imagen, con aprobación.
+- Análisis estático de seguridad con **CodeQL** (`.github/workflows/codeql.yml`) y **Dependabot** para npm, GitHub Actions y Docker.
+- **Dockerfile** multietapa: dependencias de producción, sin npm en la imagen final, usuario sin privilegios y `HEALTHCHECK`. Script `docker/entrypoint.sh`, que migra, carga datos opcionales e inicia la aplicación.
+- Endpoint público **`GET /api/salud`**: estado de la aplicación y de la BD, versión y commit; 503 si la BD no responde.
+- Scripts del pipeline: `scripts/ci/esperar-salud.sh` y `scripts/ci/pruebas-humo.sh`. Prueba de carga `tests/carga/staging.js`.
+- Umbrales de cobertura en Vitest: líneas y sentencias 80 %, ramas y funciones 70 %.
+- Plantilla de pull request. Documento [docs/pipeline.md](docs/pipeline.md).
+
+### Cambiado
+
+- **Next.js 16.4.4 → 16.4.6** y `eslint-config-next` 16.4.6. Corrige los avisos GHSA-mfr8-8qww-v76h y GHSA-vc7v-qv4w-wrv8: `next build` se negó a compilar con la versión anterior.
+- `npm audit fix`: ESLint y sus complementos quedan sin avisos. La auditoría completa termina con 0 vulnerabilidades.
+- Pruebas E2E: en el pipeline reutilizan la compilación de la etapa 4 (`E2E_BUILD_LISTO=1`) y generan reporte JUnit.
+- `scripts/migrar.ts` acepta `MIGRACIONES_DIR`, que usa la imagen Docker.
+- Versión del paquete: 1.2.0.
+
 ## [1.1.0] - 2026-11-03 — Correcciones de auditoría
 
 Versión posterior a la línea base. Atiende los hallazgos de la auditoría sobre pedidos en tiempo real, facturación y cierre diario de caja. La etiqueta `v1.0.0` se conserva sin cambios.
@@ -72,6 +100,7 @@ Primera versión estable. Incluye los cambios integrados en `main` desde el comm
 - Pagos en línea, notificaciones y actualización en tiempo real por WebSockets.
 - Ver [docs/alcance.md](docs/alcance.md).
 
-[Sin publicar]: ../../compare/v1.1.0...HEAD
+[Sin publicar]: ../../compare/v1.2.0...HEAD
+[1.2.0]: ../../compare/v1.1.0...v1.2.0
 [1.1.0]: ../../compare/v1.0.0...v1.1.0
 [1.0.0]: ../../releases/tag/v1.0.0

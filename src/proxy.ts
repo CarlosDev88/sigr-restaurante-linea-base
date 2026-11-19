@@ -6,7 +6,11 @@ import { COOKIE_SESION, verificarSesion } from "@/lib/auth/token";
  * NO reemplaza la autorización por rol, que se hace en cada página, Server Action y
  * Route Handler (ver src/lib/auth/sesion.ts → exigirRol).
  */
+/** Rutas de la API que no requieren sesión. */
+const API_PUBLICA = ["/api/salud"];
+
 export async function proxy(request: NextRequest) {
+  if (API_PUBLICA.includes(request.nextUrl.pathname)) return NextResponse.next();
   const sesion = await verificarSesion(request.cookies.get(COOKIE_SESION)?.value);
   if (sesion) return NextResponse.next();
 
