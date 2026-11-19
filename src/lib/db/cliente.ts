@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import { createClient, type Client, type InStatement, type Transaction } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
 import * as schema from "./schema";
@@ -103,6 +105,11 @@ function serializarEscrituras(cliente: Client): Client {
 }
 
 export function crearBD(url: string = process.env.DATABASE_URL ?? URL_BD_POR_DEFECTO): BD {
+  // SQLite crea el archivo pero no la carpeta: sin esto, una instalación limpia (sin ./data)
+  // falla con SQLITE_CANTOPEN al compilar o al arrancar. Lo detectó el pipeline CI/CD.
+  if (url.startsWith("file:")) {
+    mkdirSync(path.dirname(path.resolve(url.slice("file:".length))), { recursive: true });
+  }
   // timeout: si OTRO proceso (p. ej. un script de migración) bloquea el archivo, espera hasta 5 s.
   const cliente = serializarEscrituras(createClient({ url, timeout: 5000 }));
   return drizzle(cliente, { schema });
