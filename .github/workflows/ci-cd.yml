@@ -201,6 +201,8 @@ jobs:
           only-fixed: true
           output-format: table
       - name: Guardar imagen para el despliegue
+        # shell: bash explícito activa pipefail: si docker save falla, el paso falla.
+        shell: bash
         run: docker save "$IMAGEN_LOCAL" | gzip > sigr-imagen.tar.gz
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -242,6 +244,8 @@ jobs:
       - name: Esperar disponibilidad (/api/salud)
         run: bash scripts/ci/esperar-salud.sh http://localhost:3000
       - name: Pruebas de humo
+        # shell: bash explícito activa pipefail: el código de salida es el del script, no el de tee.
+        shell: bash
         run: bash scripts/ci/pruebas-humo.sh http://localhost:3000 | tee -a "$GITHUB_STEP_SUMMARY"
       - uses: grafana/setup-k6-action@c47136d33d365efbeb9ae7266908b5dcf98cdece # v1.3.0
         with:
@@ -255,6 +259,7 @@ jobs:
       - name: Estado del contenedor (HEALTHCHECK de Docker)
         if: always()
         run: |
+          mkdir -p reportes
           docker inspect --format 'Salud del contenedor: {{.State.Health.Status}}' sigr-staging || true
           docker logs sigr-staging > reportes/staging.log 2>&1 || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

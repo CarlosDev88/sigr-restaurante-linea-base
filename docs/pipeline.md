@@ -49,7 +49,7 @@ flowchart LR
 | Seguridad de dependencias | `npm audit`, revisión de dependencias del PR, Dependabot | Etapa 3 y semanal | 0 en producción; ninguna alta o crítica |
 | Seguridad de la imagen | Escaneo de vulnerabilidades del contenedor con Grype | Etapa 6 | Sin críticas corregibles |
 | Control de acceso | Pruebas de humo: rutas protegidas → 307/401 | Etapa 7 | Todas responden como se espera |
-| Calidad funcional | 85 pruebas Vitest + 13 E2E; cobertura mínima | Etapas 2 y 5 | 100 % aprobadas |
+| Calidad funcional | 86 pruebas Vitest + 13 E2E; cobertura mínima | Etapas 2 y 5 | 100 % aprobadas |
 
 ## Buenas prácticas aplicadas
 
